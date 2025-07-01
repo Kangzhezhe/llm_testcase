@@ -18,6 +18,28 @@ import time
 from ENV import deep_seek_url, deep_seek_api_key, deep_seek_default_model
 from md_to_txt import text_pieces
 
+"""
+1.提取业务模块摘要
+—— 先对需求文档进行结构化梳理，明确有哪些业务模块。
+
+2.将模块摘要的业务逻辑细化
+—— 对每个模块进一步拆解，明确每个模块的详细业务流程和规则。
+
+3.针对业务模块摘要和逻辑，生成业务流程图
+—— 用流程图（如 mermaid）可视化业务流，便于后续用例映射和覆盖分析。
+
+4.根据业务流程图生成测试用例，并建立用例与流程节点/连接线的映射（需求-用例矩阵）
+—— 这样可以追踪每个用例覆盖了哪些需求节点和流程分支。
+
+5.计算测试用例覆盖率
+—— 统计当前用例集对流程节点和连接线的覆盖情况。
+
+6.对未覆盖的节点和连接线，生成新的测试用例
+—— 自动补全测试盲区，提升测试完整性。
+
+7.循环执行4-6，直到全部覆盖
+—— 形成自动化闭环，确保无遗漏。
+"""
 
 class CustomCallbackHandler(BaseCallbackHandler):
     def __init__(self):
@@ -103,7 +125,7 @@ def main():
     with open("result.md", "w", encoding="utf-8") as f:
         f.write(result["testcases"])
     
-    print("LCEL方式完成！结果保存到 result.md")
+    print("结果保存到 result.md")
     print(result["testcases"])
 
 if __name__ == "__main__":
