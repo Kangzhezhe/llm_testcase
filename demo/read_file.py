@@ -74,7 +74,7 @@ def split_by_markdown_heading(document_content):
     paragraphs = [p for p in paragraphs if p.strip().startswith("#")]
     return paragraphs
 
-def smart_split(content, max_len=3000, window_expand=None, return_reasons=False):
+def smart_split(content, max_len=1000, window_expand=200, overlap=100, return_reasons=False):
     """
     智能分块：优先级分割
     1. 标题级别（#数越少优先，且尽量靠近max_len）
@@ -85,12 +85,13 @@ def smart_split(content, max_len=3000, window_expand=None, return_reasons=False)
     :param content: str
     :param max_len: int
     :param window_expand:  int，默认max_len的一半
+    :param overlap: int，分块重叠长度
     :param return_reasons: bool，是否返回分块原因
     :return: List[str] 或 List[(str, reason)]
     """
 
-    if window_expand is None:
-        window_expand = max_len // 2
+    # if window_expand is None:
+    #     window_expand = max_len // 2
 
     pieces = []
     split_reasons = []
@@ -120,7 +121,7 @@ def smart_split(content, max_len=3000, window_expand=None, return_reasons=False)
             split_pos = start + title_candidates[0][2]
             pieces.append(content[start:split_pos].strip())
             split_reasons.append(f"标题级别（#={title_candidates[0][0]}）")
-            start = split_pos
+            start = max(split_pos - overlap, start)  # 支持overlap
             continue
 
         # 2. 数字+.分割，数字小优先，且尽量靠近max_len
@@ -136,7 +137,7 @@ def smart_split(content, max_len=3000, window_expand=None, return_reasons=False)
             split_pos = start + num_candidates[0][2]
             pieces.append(content[start:split_pos].strip())
             split_reasons.append(f"数字小标题级别+.（数字={num_candidates[0][0]}）")
-            start = split_pos
+            start = max(split_pos - overlap, start)
             continue
 
         # 3. 双换行，尽量靠近max_len
@@ -149,7 +150,7 @@ def smart_split(content, max_len=3000, window_expand=None, return_reasons=False)
             split_pos = start + para_pos + 2
             pieces.append(content[start:split_pos].strip())
             split_reasons.append("双换行")
-            start = split_pos
+            start = max(split_pos - overlap, start)
             continue
 
         # 4. 句号分割（支持中英文句号），尽量靠近max_len
@@ -162,19 +163,19 @@ def smart_split(content, max_len=3000, window_expand=None, return_reasons=False)
             split_pos = start + period_pos + 1
             pieces.append(content[start:split_pos].strip())
             split_reasons.append("句号分割")
-            start = split_pos
+            start = max(split_pos - overlap, start)
             continue
 
         # 5. 暴力分块
         split_pos = start + max_len
         pieces.append(content[start:split_pos].strip())
         split_reasons.append("暴力分块")
-        start = split_pos
+        start = max(split_pos - overlap, start)
 
     if return_reasons:
-        return [(p, r) for p, r in zip(pieces, split_reasons) if p]
+        return [( p, r) for idx, (p, r) in enumerate(zip(pieces, split_reasons)) if p]
     else:
-        return [p for p in pieces if p]
+        return [ p for idx, p in enumerate(pieces) if p]
 
 def main():
     if len(sys.argv) < 2:
@@ -189,6 +190,11 @@ def main():
         pieces = smart_split(content,max_len=1000, return_reasons=True)
         for idx, (piece, reason) in enumerate(pieces):
             print(f"[块{idx+1} 长度{len(piece)}]（依据：{reason}）:\n{piece}\n------")
+
+        # pieces = split_by_markdown_heading(content)
+        # for idx, piece in enumerate(pieces):
+        #     print(f"[块{idx+1} 长度{len(piece)}]:\n{piece}\n------")
+
     except Exception as e:
         print(f"读取文档时出错：{e}")
 

@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: 读取文档并智能分块",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/demo/read_file.py",
+            "console": "integratedTerminal",
+            "args": [
+                "${workspaceFolder}/data/需求文件/需求分析报告-湖北中烟新型烟草产品调研与开发信息反馈系统项目.docx"
+            ]
+        }
+    ]
+}
