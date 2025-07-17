@@ -221,13 +221,11 @@ class TemplateParser:
     def get_format_instructions(self):
         instructions = (
             "请严格按照如下格式输出：\n"
-            "变量值需替换模板(<template></template>)中的变量定义部分（如 {name:str}），其他内容保持一致。\n"
+            "变量值需替换模板中的变量定义部分（如 {name:str}），其他内容保持完全一致，包括所有标点符号。\n"
             "如遇 json 类型变量，请直接嵌入合法 JSON，特殊字符需正确转义，且需符合指定 schema。\n\n"
             "模板如下：\n"
-            "<template>\n"
-            f"{self.template}\n"
-            "</template>\n\n"
-            "输出的格式示例如下(<example></example>)\n"
+            f"{self.template}\n\n"
+            "输出的格式示例如下\n"
             "示例：\n"
         )
         example = self.template
@@ -268,7 +266,7 @@ class TemplateParser:
             else:
                 value = "示例内容"
             example = re.sub(rf"\{{{name}:[^\}}]+\}}", value, example)
-        instructions += "<template>\n" + example + "\n</template>\n"
+        instructions +=  example 
         if json_schemas:
             instructions += "json 类型变量的 schema 如下：\n"
             for name, schema in json_schemas.items():
@@ -284,8 +282,11 @@ if __name__ == "__main__":
     template = "数据={data:json:ListDictModel}"
     # template = "模型={model:json:MyModel}"
     # llm_output = '模型={"foo": "hello", "num": "123"}。'
-    llm_output = '数据={"items": [1, 2, 3], "config": {"a": 1, "b": 2}}'
-    validator = TemplateParser(template, model_map={"ListDictModel": ListDictModel})
-    print(validator.get_format_instructions())
-    result = validator.validate(llm_output)
+    # llm_output = '数据={"items": [1, 2, 3], "config": {"a": 1, "b": 2}}'
+    llm_output = '姓名=张三，年龄=18，模型={"foo": "bar", "num": "1"}， 激活=true'
+    template = "姓名={name:str}，年龄={age:int}，模型={model:json:MyModel}，激活={active:bool}"
+    parser = TemplateParser(template, model_map={"MyModel": MyModel})
+    # validator = TemplateParser(template, model_map={"ListDictModel": ListDictModel})
+    print(parser.get_format_instructions())
+    result = parser.validate(llm_output)
     print(result)

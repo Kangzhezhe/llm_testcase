@@ -108,7 +108,7 @@ def test_llm_model_nested_model():
     assert result["data"]["main"]["sub"]["bar"] == 99
 
 def test_llm_model_multiple_fields():
-    template = "姓名={name:str}，年龄={age:int}，模型={model:json:MyModel}，激活={active:bool}"
+    template = "姓名={name:str},年龄={age:int},模型={model:json:MyModel},激活={active:bool}"
     parser = TemplateParser(template, model_map={"MyModel": MyModel})
     instructions = parser.get_format_instructions()
     prompt = instructions + "\n请输出姓名为张三，年龄为18，模型foo为bar，num为1，激活为true的内容。"

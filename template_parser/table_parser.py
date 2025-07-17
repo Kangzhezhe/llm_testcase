@@ -46,7 +46,7 @@ class TableParser:
     def get_format_instructions(self) -> str:
         if self.value_only:
             headers = list(self.row_model.model_fields.keys())
-            example_row = ",".join([f'"{h}值"' if self.row_model.model_fields[h].annotation == str else "1" for h in headers])
+            example_row = ",".join([f'"{h}值(替换为具体数值)"' if self.row_model.model_fields[h].annotation == str else "1" for h in headers])
             instructions = (
                 "请按如下格式输出，仅包含值，不需要字段名：\n"
                 "每行用大括号包裹，字段顺序为：" + ",".join(headers) + "\n"
