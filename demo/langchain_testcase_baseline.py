@@ -8,7 +8,7 @@ os.environ["LANGCHAIN_API_KEY"] = "lsv2_pt_ec600d6f3d57434e82e9912a6cefad01_4062
 os.environ["LANGCHAIN_PROJECT"] = "default"
 
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate # type: ignore
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableLambda

@@ -49,17 +49,19 @@ def merge_md_tables(md_tables: list):
 
 def main():
     # 定义需要处理的文件列表
+    output_dir = "output"
+    os.makedirs(output_dir, exist_ok=True)
     file_list = [
         {
-            "file_path": "D:\\2025.7.14-2025.7.20\\llm_testcase\\data\\需求文件\\需求分析报告-湖北中烟新型烟草产品调研与开发信息反馈系统项目.docx",
+            "file_path": "D:\\testcase\\aitestcases\\data\\需求文件\\需求分析报告-湖北中烟新型烟草产品调研与开发信息反馈系统项目.docx",
             "type": "需求文档"
         },
         {
-            "file_path": "D:\\2025.7.14-2025.7.20\\llm_testcase\\data\\需求文件\\湖北中烟工程中心数字管理应用用户操作手册v1.0.docx",
+            "file_path": "D:\\testcase\\aitestcases\\data\\需求文件\\湖北中烟工程中心数字管理应用用户操作手册v1.0.docx",
             "type": "用户手册"
         },
         {
-            "file_path": "D:\\2025.7.14-2025.7.20\\llm_testcase\\data\\需求文件\\数字信息化管理应用系统接口文档.docx",
+            "file_path": "D:\\testcase\\aitestcases\\data\\需求文件\\数字信息化管理应用系统接口文档.docx",
             "type": "技术文档"
         }
     ]
@@ -89,14 +91,22 @@ def main():
         optimized_tables.append(optimized_table)
 
         # 可选：也可以写每个chunk结果到文件
+<<<<<<< HEAD
         with open(f"requirements_chunk_{i}_optimized.md", "w", encoding="utf-8") as f:
+=======
+        with open(f"{output_dir}/requirements_chunk_{i}_optimized.md", "w", encoding="utf-8") as f:
+>>>>>>> e99c2ffdb5edec93710d90fe0f78ed168c9d85a7
             f.write(optimized_table)
 
     # 合并所有优化后的表格
     merged_table = merge_md_tables(optimized_tables)
 
     # 输出最终结果
+<<<<<<< HEAD
     final_path = "final_requirements.md"
+=======
+    final_path = f"{output_dir}/final_requirements.md"
+>>>>>>> e99c2ffdb5edec93710d90fe0f78ed168c9d85a7
     with open(final_path, "w", encoding="utf-8") as f:
         f.write(merged_table)
 
