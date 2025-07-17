@@ -222,11 +222,11 @@ class TemplateParser:
         instructions = (
             "请严格按照如下格式输出：\n"
             "变量值需替换模板中的变量定义部分（如 {name:str}），其他内容保持完全一致，包括所有标点符号。\n"
+            "例如：\"姓名={name:str}，年龄={age:int}。\"替换为\"姓名=张三，年龄=18。\"\n"
             "如遇 json 类型变量，请直接嵌入合法 JSON，特殊字符需正确转义，且需符合指定 schema。\n\n"
             "模板如下：\n"
             f"{self.template}\n\n"
             "输出的格式示例如下\n"
-            "示例：\n"
         )
         example = self.template
         example_values = {
@@ -247,7 +247,7 @@ class TemplateParser:
             if isinstance(typ, type) and issubclass(typ, BaseModel):
                 # 自动生成示例值
                 fields = list(typ.model_fields.keys())
-                value_dict = {f: "示例值" for f in fields}
+                value_dict = {f: f"示例值" for f in fields}
                 value = json.dumps(value_dict, ensure_ascii=False)
                 json_schemas[name] = typ.model_json_schema()
             elif typ_str == "list":
@@ -268,7 +268,7 @@ class TemplateParser:
             example = re.sub(rf"\{{{name}:[^\}}]+\}}", value, example)
         instructions +=  example 
         if json_schemas:
-            instructions += "json 类型变量的 schema 如下：\n"
+            instructions += "\njson 类型变量的 schema 如下：\n"
             for name, schema in json_schemas.items():
                 instructions += f"{name} field 的 schema:\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n"
         return instructions
