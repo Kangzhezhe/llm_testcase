@@ -7,13 +7,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
 
 from llm.template_parser.table_parser import TableParser
 from llm.llm import LLM
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from typing import List
 
 class RequirementRow(BaseModel):
-    index: int         # 序号
-    module: str        # 模块
-    requirement: str   # 需求点
+    index: int = Field(..., description="序号，从1开始依次递增")
+    module: str = Field(..., description="模块名称")
+    requirement: str = Field(..., description="需求点")
+    requirement_text: str = Field(..., description="原始需求文本")
 
 class RequirementTableModel(BaseModel):
     rows: List[RequirementRow]
@@ -21,7 +22,7 @@ class RequirementTableModel(BaseModel):
 def extract_requirements(document: str, llm: LLM, table_parser: TableParser):
     prompt = (
         "你是专业的需求分析师。\n"
-        "请从以下文档中，提取所有模块名称及对应的需求点，输出结构化表格数据。\n"
+        "请从以下文档中，提取所有模块名称及对应的需求点，与原始需求文本，输出结构化表格数据。\n"
         "不要输出多余文字，只输出结构化表格。\n"
         "\n文档如下：\n" + document
     )
@@ -43,7 +44,7 @@ def main():
     md_content = table_parser.to_markdown(rows)
     md_lines = md_content.splitlines()
     if len(md_lines) >= 2:
-        md_lines[0] = "| 序号 | 模块 | 需求点 |"
+        md_lines[0] = "| 序号 | 模块 | 需求点 | 原始需求文本 |"
         md_content = "\n".join(md_lines)
 
     with open("requirements.md", "w", encoding="utf-8") as f:
