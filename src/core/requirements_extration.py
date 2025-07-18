@@ -12,7 +12,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.callbacks import BaseCallbackHandler
 
 # 从 ENV.py 导入
-from ENV import deep_seek_url, deep_seek_api_key, deep_seek_default_model
+from src.ENV import llm_url, llm_api_key, llm_default_model
 
 class CustomCallbackHandler(BaseCallbackHandler):
     def on_llm_start(self, serialized, prompts, **kwargs):
@@ -25,9 +25,9 @@ class CustomCallbackHandler(BaseCallbackHandler):
 
 # 配置 LLM
 llm = ChatOpenAI(
-    base_url=deep_seek_url,
-    api_key=deep_seek_api_key,
-    model=deep_seek_default_model,
+    base_url=llm_url,
+    api_key=llm_api_key,
+    model=llm_default_model,
     temperature=0.3
 )
 

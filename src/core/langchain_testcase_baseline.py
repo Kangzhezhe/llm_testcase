@@ -8,15 +8,15 @@ os.environ["LANGCHAIN_API_KEY"] = "lsv2_pt_ec600d6f3d57434e82e9912a6cefad01_4062
 os.environ["LANGCHAIN_PROJECT"] = "default"
 
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate # type: ignore
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableLambda
 from langchain_core.tracers import ConsoleCallbackHandler
 from langchain_core.callbacks import BaseCallbackHandler
 import time
-from ENV import deep_seek_url, deep_seek_api_key, deep_seek_default_model
-from read_file import read_file, smart_split
+from src.ENV import llm_url, llm_api_key, llm_default_model
+from llm.read_file import read_file, smart_split
 # from md_to_txt import text_pieces
 
 """
@@ -71,9 +71,9 @@ class CustomCallbackHandler(BaseCallbackHandler):
 
 # 配置LLM
 llm = ChatOpenAI(
-    base_url=deep_seek_url,
-    api_key=deep_seek_api_key,
-    model=deep_seek_default_model,
+    base_url=llm_url,
+    api_key=llm_api_key,
+    model=llm_default_model,
     temperature=0.7
 )
 

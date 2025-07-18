@@ -1,11 +1,11 @@
 import pytest
 from pydantic import BaseModel
-from template_parser.table_parser import TableParser, RowModel, TableModel
+from ..table_parser import TableParser, RowModel, TableModel
 
 def test_parse_json_table():
     llm_output = '{"rows": [{"foo": "A", "num": 1}, {"foo": "B", "num": 2}]}'
     parser = TableParser(TableModel)
-    result = parser.parse(llm_output)
+    result = parser.validate(llm_output)
     assert result["success"]
     assert result["data"]["table"]["rows"][0]["foo"] == "A"
     assert result["data"]["table"]["rows"][1]["num"] == 2
@@ -13,7 +13,7 @@ def test_parse_json_table():
 def test_parse_value_only_table():
     llm_output = '{ {"A",1}, {"B",2} }'
     parser = TableParser(TableModel, value_only=True)
-    result = parser.parse(llm_output)
+    result = parser.validate(llm_output)
     assert result["success"]
     rows = result["data"]["table"]["rows"]
     assert rows[0]["foo"] == "A"
@@ -48,21 +48,21 @@ def test_markdown_output():
 def test_empty_rows():
     llm_output = ""
     parser = TableParser(TableModel, value_only=True)
-    result = parser.parse(llm_output)
+    result = parser.validate(llm_output)
     assert result["success"]
     assert result["data"]["table"]["rows"] == []
 
 def test_wrong_value_count():
     llm_output = '{ {"A"} }'
     parser = TableParser(TableModel, value_only=True)
-    result = parser.parse(llm_output)
+    result = parser.validate(llm_output)
     assert result["success"]
     assert result["data"]["table"]["rows"] == []
 
 def test_type_convert_error():
     llm_output = '{ {"A","not_int"} }'
     parser = TableParser(TableModel, value_only=True)
-    result = parser.parse(llm_output)
+    result = parser.validate(llm_output)
     # num 字段类型转换失败会被跳过
     assert result["success"]
     assert result["data"]["table"]["rows"] == []
@@ -70,7 +70,7 @@ def test_type_convert_error():
 def test_extra_spaces_and_quotes():
     llm_output = '{ { "A" , 1 }, { "B" , 2 } }'
     parser = TableParser(TableModel, value_only=True)
-    result = parser.parse(llm_output)
+    result = parser.validate(llm_output)
     assert result["success"]
     assert result["data"]["table"]["rows"][0]["foo"] == "A"
     assert result["data"]["table"]["rows"][1]["foo"] == "B"
@@ -90,7 +90,7 @@ def test_parse_json_person_table():
     llm_output = '{"people": [{"name": "Tom", "age": 20, "score": 88.5}, {"name": "Lily", "age": 22, "score": 92.0}]}'
     parser = TableParser(PersonTableModel)
     table_field = parser.table_field
-    result = parser.parse(llm_output)
+    result = parser.validate(llm_output)
     assert result["success"]
     assert result["data"]["table"][table_field][0]["name"] == "Tom"
     assert result["data"]["table"][table_field][1]["score"] == 92.0
@@ -99,7 +99,7 @@ def test_parse_value_only_person_table():
     llm_output = '{ {"Tom",20,88.5}, {"Lily",22,92.0} }'
     parser = TableParser(PersonTableModel, value_only=True)
     table_field = parser.table_field
-    result = parser.parse(llm_output)
+    result = parser.validate(llm_output)
     assert result["success"]
     rows = result["data"]["table"][table_field]
     assert rows[0]["name"] == "Tom"
@@ -136,7 +136,7 @@ def test_person_type_convert_error():
     llm_output = '{ {"Tom","not_int",88.5} }'
     parser = TableParser(PersonTableModel, value_only=True)
     table_field = parser.table_field
-    result = parser.parse(llm_output)
+    result = parser.validate(llm_output)
     assert result["success"]
     assert result["data"]["table"][table_field] == []
 

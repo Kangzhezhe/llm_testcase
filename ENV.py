@@ -1,5 +1,0 @@
-deep_seek_url = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-deep_seek_api_key = 'sk-ebd1315a8a6a4ae3832e8aa0d2482d28'
-# deep_seek_default_model = 'deepseek-v3'
-# deep_seek_default_model = 'qwen2.5-7b-instruct-1m'
-deep_seek_default_model = 'qwen2.5-7b-instruct'

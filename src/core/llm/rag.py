@@ -6,27 +6,32 @@ from openai import OpenAI
 import chromadb
 from chromadb.utils import embedding_functions
 from read_file import read_file, smart_split
-from ENV import deep_seek_url, deep_seek_api_key, deep_seek_default_model
+from src.ENV import llm_url, llm_api_key, llm_default_model,embedding_api_key,embedding_url, embedding_default_model,embedding_dimensions
 import chromadb
 from read_file import read_file, smart_split
 from langchain_openai import ChatOpenAI
 
 # 1. 初始化 DashScope embedding 客户端
 client = OpenAI(
-    api_key=deep_seek_api_key,
-    base_url=deep_seek_url
+    api_key=embedding_api_key,
+    base_url=embedding_url
 )
 
 def get_embedding(text):
     resp = client.embeddings.create(
-        model="text-embedding-v4",
+        model=embedding_default_model,
         input=text,
-        dimensions=3072,
+        dimensions=embedding_dimensions,
         encoding_format="float"
     )
     return resp.data[0].embedding
 
-def search_knowledge_base(query, collection, top_k=5, meta_filter=None):
+def search_knowledge_base(
+        query,
+        persist_dir="rag_chroma_db", 
+        collection_name="rag_demo", 
+        top_k=5, 
+        meta_filter=None):
     """
     支持通过meta_filter字典统一过滤的知识库检索。
 
@@ -40,6 +45,8 @@ def search_knowledge_base(query, collection, top_k=5, meta_filter=None):
         List[str]: 分块内容列表
     """
     query_emb = get_embedding(query)
+    chroma_client = chromadb.PersistentClient(path=persist_dir)
+    collection = chroma_client.get_or_create_collection(collection_name)
     results = collection.query(
         query_embeddings=[query_emb],
         n_results=top_k * 3,
@@ -67,9 +74,9 @@ def search_knowledge_base(query, collection, top_k=5, meta_filter=None):
 
 def rag_qa(query, docs):
     llm = ChatOpenAI(
-        base_url=deep_seek_url,
-        api_key=deep_seek_api_key,
-        model=deep_seek_default_model,
+        base_url=llm_url,
+        api_key=llm_api_key,
+        model=llm_default_model,
         temperature=0.2
     )
     context = "\n\n".join(docs)
@@ -87,6 +94,7 @@ def rag_qa(query, docs):
 def build_multi_file_knowledge_base(
     file_list, 
     persist_dir="rag_chroma_db", 
+    collection_name="rag_demo",
     max_len=1000, 
     overlap=100
 ):
@@ -112,7 +120,7 @@ def build_multi_file_knowledge_base(
     """
     
     chroma_client = chromadb.PersistentClient(path=persist_dir)
-    collection = chroma_client.get_or_create_collection("rag_demo")
+    collection = chroma_client.get_or_create_collection(collection_name)
     all_ids = collection.get()['ids']
     if all_ids:
         collection.delete(ids=all_ids)

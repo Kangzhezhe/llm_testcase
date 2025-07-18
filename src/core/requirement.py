@@ -1,7 +1,7 @@
 import os
 import re
 
-from rag import build_multi_file_knowledge_base, show_chroma_collection
+from llm.rag import build_multi_file_knowledge_base, show_chroma_collection
 from requirements_extration import extract_requirements, optimize_requirements
 
 def extract_md_rows(md_table: str):
@@ -91,22 +91,14 @@ def main():
         optimized_tables.append(optimized_table)
 
         # 可选：也可以写每个chunk结果到文件
-<<<<<<< HEAD
         with open(f"requirements_chunk_{i}_optimized.md", "w", encoding="utf-8") as f:
-=======
-        with open(f"{output_dir}/requirements_chunk_{i}_optimized.md", "w", encoding="utf-8") as f:
->>>>>>> e99c2ffdb5edec93710d90fe0f78ed168c9d85a7
             f.write(optimized_table)
 
     # 合并所有优化后的表格
     merged_table = merge_md_tables(optimized_tables)
 
     # 输出最终结果
-<<<<<<< HEAD
     final_path = "final_requirements.md"
-=======
-    final_path = f"{output_dir}/final_requirements.md"
->>>>>>> e99c2ffdb5edec93710d90fe0f78ed168c9d85a7
     with open(final_path, "w", encoding="utf-8") as f:
         f.write(merged_table)
 

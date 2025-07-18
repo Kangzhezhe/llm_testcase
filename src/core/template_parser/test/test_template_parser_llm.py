@@ -1,18 +1,16 @@
 import pytest
 from pydantic import BaseModel
-from template_parser.template_parser import TemplateParser, MyModel
+import os
+import sys
+from ..template_parser import TemplateParser, MyModel
 
 import os
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
-os.environ["LANGCHAIN_API_KEY"] = "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"
-os.environ["LANGCHAIN_PROJECT"] = "default"
-from ENV import deep_seek_url, deep_seek_api_key, deep_seek_default_model
+from src.ENV import llm_url, llm_api_key, llm_default_model
 from langchain_openai import ChatOpenAI
 llm = ChatOpenAI(
-    base_url=deep_seek_url,
-    api_key=deep_seek_api_key,
-    model=deep_seek_default_model,
+    base_url=llm_url,
+    api_key=llm_api_key,
+    model=llm_default_model,
     temperature=0.3
 )
 

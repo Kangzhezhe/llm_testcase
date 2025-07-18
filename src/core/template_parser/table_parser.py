@@ -1,7 +1,10 @@
 import json
 from typing import List, Any, Type
 from pydantic import BaseModel, ValidationError
-from template_parser.template_parser import TemplateParser, MyModel
+import os
+import sys
+from .template_parser import TemplateParser, MyModel
+
 
 # 每行数据结构，支持int, str ,float等类型
 class RowModel(BaseModel):
@@ -35,7 +38,7 @@ class TableParser:
                 model_map[field_type.__name__] = field_type
         self.parser = TemplateParser(self.template, model_map=model_map)
 
-    def parse(self, llm_output: str):
+    def validate(self, llm_output: str):
         if self.value_only:
             llm_output_1 = {self.table_field: self._parse_value_only(llm_output)}
             llm_output_json = json.dumps(llm_output_1, ensure_ascii=False)
@@ -67,7 +70,7 @@ class TableParser:
             return self.parser.get_format_instructions()
 
     def get_rows(self, llm_output: str):
-        result = self.parse(llm_output)
+        result = self.validate(llm_output)
         if not result["success"]:
             return []
         return result["data"]["table"][self.table_field]
@@ -99,8 +102,11 @@ class TableParser:
                     raise e  # 类型转换失败则抛出异常
         return rows
 
-    def to_tsv(self, llm_output: str) -> str:
-        rows = self.get_rows(llm_output)
+    def to_tsv(self, llm_output) -> str:
+        if isinstance(llm_output, list):
+            rows = llm_output
+        else:
+            rows = self.get_rows(llm_output)
         if not rows:
             return ""
         headers = list(self.row_model.model_fields.keys())
@@ -110,10 +116,13 @@ class TableParser:
             lines.append(line)
         return "\n".join(lines)
 
-    def to_csv(self, llm_output: str) -> str:
+    def to_csv(self, llm_output) -> str:
         import csv
         from io import StringIO
-        rows = self.get_rows(llm_output)
+        if isinstance(llm_output, list):
+            rows = llm_output
+        else:
+            rows = self.get_rows(llm_output)
         if not rows:
             return ""
         headers = list(self.row_model.model_fields.keys())
@@ -124,8 +133,11 @@ class TableParser:
             writer.writerow({h: row[h] for h in headers})
         return output.getvalue().strip()
 
-    def to_markdown(self, llm_output: str) -> str:
-        rows = self.get_rows(llm_output)
+    def to_markdown(self, llm_output) -> str:
+        if isinstance(llm_output, list):
+            rows = llm_output
+        else:
+            rows = self.get_rows(llm_output)
         if not rows:
             return ""
         headers = list(self.row_model.model_fields.keys())
@@ -135,8 +147,11 @@ class TableParser:
             md += "| " + " | ".join(str(row[h]) for h in headers) + " |\n"
         return md.strip()
 
-    def to_json(self, llm_output: str) -> str:
-        rows = self.get_rows(llm_output)
+    def to_json(self, llm_output) -> str:
+        if isinstance(llm_output, list):
+            rows = llm_output
+        else:
+            rows = self.get_rows(llm_output)
         if not rows:
             return json.dumps({self.table_field: []}, ensure_ascii=False)
         return json.dumps({self.table_field: rows}, ensure_ascii=False)
@@ -151,7 +166,7 @@ def test_table_parser():
     print(table_parser.get_format_instructions())
 
     print("原始解析：")
-    print(table_parser.parse(llm_output))
+    print(table_parser.validate(llm_output))
     print("\nTSV格式：")
     print(table_parser.to_tsv(llm_output))
     print("\nCSV格式：")
