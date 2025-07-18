@@ -1,15 +1,21 @@
 from src.ENV import llm_url, llm_api_key, llm_default_model
 from langchain_openai import ChatOpenAI
-from rag import get_embedding, search_knowledge_base, build_multi_file_knowledge_base
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from template_parser.template_parser import TemplateParser, MyModel
-from template_parser.table_parser import TableModel, TableParser
+from .rag import get_embedding, search_knowledge_base, build_multi_file_knowledge_base
+from .template_parser.template_parser import TemplateParser, MyModel
+from .template_parser.table_parser import TableModel, TableParser
+from langchain_core.callbacks import BaseCallbackHandler
 
+class CustomCallbackHandler(BaseCallbackHandler):
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        print("\n====== LLM 开始 ======")
+        print(f"提示词：{prompts}")
+
+    def on_llm_end(self, response, **kwargs):
+        print("\n====== LLM 结束 ======")
+        print(f"输出：{response.generations}")
 
 class LLM:
-    def __init__(self, model=None, temperature=0.3, history_len=0):
+    def __init__(self, model=None, temperature=0.3, history_len=0, logger=False):
         self.llm = ChatOpenAI(
             base_url=llm_url,
             api_key=llm_api_key,
@@ -19,6 +25,7 @@ class LLM:
         self.file_list = None
         self.history = []
         self.history_len = history_len
+        self.logger = logger
 
     def build_knowledge_base(self, file_list, persist_dir="rag_chroma_db", collection_name="rag_demo", max_len=1000, overlap=100):
         self.file_list = file_list
@@ -53,7 +60,11 @@ class LLM:
         return full_prompt
 
     def _invoke_llm(self, full_prompt, **kwargs):
-        result = self.llm.invoke(full_prompt, **kwargs)
+        if self.logger:
+            result = self.llm.invoke(full_prompt, **kwargs, config={"callbacks": [CustomCallbackHandler()]})
+        else:
+            result = self.llm.invoke(full_prompt, **kwargs)
+
         if hasattr(result, "content"):
             content = result.content
         elif isinstance(result, dict) and "content" in result:

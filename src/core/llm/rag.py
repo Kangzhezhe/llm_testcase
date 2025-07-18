@@ -1,14 +1,11 @@
 import os
 import json
-import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from openai import OpenAI
 import chromadb
 from chromadb.utils import embedding_functions
-from read_file import read_file, smart_split
+from .read_file import read_file, smart_split
 from src.ENV import llm_url, llm_api_key, llm_default_model,embedding_api_key,embedding_url, embedding_default_model,embedding_dimensions
 import chromadb
-from read_file import read_file, smart_split
 from langchain_openai import ChatOpenAI
 
 # 1. 初始化 DashScope embedding 客户端

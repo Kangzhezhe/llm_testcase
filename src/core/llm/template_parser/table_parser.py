@@ -51,7 +51,7 @@ class TableParser:
             headers = list(self.row_model.model_fields.keys())
             example_row = ",".join([f'"{h}值(替换为具体数值)"' if self.row_model.model_fields[h].annotation == str else "1" for h in headers])
             instructions = (
-                "请按如下格式输出，仅包含值，不需要字段名：\n"
+                "请按如下格式输出，仅包含value，不需要字段key：\n"
                 "每行用大括号包裹，字段顺序为：" + ",".join(headers) + "\n"
                 "例如：\n"
                 "{ " + example_row + " }\n"
@@ -59,7 +59,7 @@ class TableParser:
                 "多行用逗号分隔或放在列表中，如：\n"
                 "{ [" + "{ " + example_row + " }, { " + example_row + " }] }\n"
             )
-            instructions += "每一行字段变量类型的 schema 如下：\n"
+            instructions += "每一行字段value值的类型约束如下：\n"
             # 构建 json_schemas 字典
             json_schemas = {}
             json_schemas[self.row_model.__name__] = self.row_model.model_json_schema()

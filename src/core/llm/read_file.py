@@ -1,6 +1,5 @@
 import pdfplumber
 import docx
-import markdown
 from bs4 import BeautifulSoup
 import sys
 import re
