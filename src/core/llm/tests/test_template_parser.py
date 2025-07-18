@@ -1,7 +1,7 @@
 import pytest
 
 from pydantic import BaseModel
-from ..template_parser import TemplateParser, MyModel
+from ..template_parser.template_parser import TemplateParser, MyModel
 
 class NestedModel(BaseModel):
     foo: str

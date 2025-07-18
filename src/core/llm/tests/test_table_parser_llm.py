@@ -1,6 +1,6 @@
 import pytest
 from pydantic import BaseModel
-from ..table_parser import TableParser, RowModel, TableModel
+from ..template_parser.table_parser import TableParser, RowModel, TableModel
 
 from src.ENV import llm_url, llm_api_key, llm_default_model
 from langchain_openai import ChatOpenAI

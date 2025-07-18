@@ -1,6 +1,6 @@
 import pytest
 from pydantic import BaseModel
-from ..table_parser import TableParser, RowModel, TableModel
+from ..template_parser.table_parser import TableParser, RowModel, TableModel
 
 def test_parse_json_table():
     llm_output = '{"rows": [{"foo": "A", "num": 1}, {"foo": "B", "num": 2}]}'

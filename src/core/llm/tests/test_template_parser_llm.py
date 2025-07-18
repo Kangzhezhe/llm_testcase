@@ -2,7 +2,7 @@ import pytest
 from pydantic import BaseModel
 import os
 import sys
-from ..template_parser import TemplateParser, MyModel
+from ..template_parser.template_parser import TemplateParser, MyModel
 
 import os
 from src.ENV import llm_url, llm_api_key, llm_default_model
