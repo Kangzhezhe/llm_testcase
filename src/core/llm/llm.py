@@ -1,15 +1,18 @@
 from src.ENV import *
 import os
-os.environ["LANGCHAIN_TRACING_V2"] = LANGCHAIN_TRACING_V2
-os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
-os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
-os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
+
+if USE_LANGCHAIN:
+    os.environ["LANGCHAIN_TRACING_V2"] = LANGCHAIN_TRACING_V2
+    os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
+    os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
+    os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
 
 from langchain_openai import ChatOpenAI
 from .rag import get_embedding, search_knowledge_base, build_multi_file_knowledge_base
 from .template_parser.template_parser import TemplateParser, MyModel
 from .template_parser.table_parser import TableModel, TableParser
 from langchain_core.callbacks import BaseCallbackHandler
+from .tool_call import LLMToolCaller
 
 class CustomCallbackHandler(BaseCallbackHandler):
     def on_llm_start(self, serialized, prompts, **kwargs):
@@ -39,8 +42,9 @@ class LLM:
             file_list, persist_dir=persist_dir, collection_name=collection_name, max_len=max_len, overlap=overlap
         )
         return collection
+        
 
-    def _build_prompt(self, prompt, docs=None, parser=None):
+    def _build_prompt(self, prompt, docs=None, parser=None, caller=None):
         history_text = ""
         if self.history_len > 0:
             for item in self.history[-self.history_len:]:
@@ -57,11 +61,13 @@ class LLM:
             )
         else:
             full_prompt = history_text + "user: " + prompt
-
-        # 仅使用外部传入的 parser
+        
         if parser:
             format_instructions = parser.get_format_instructions()
             full_prompt += "\n\n" + format_instructions
+
+        if caller:
+            full_prompt += "\n\n" + caller.get_instructions()
 
         return full_prompt
 
@@ -79,7 +85,12 @@ class LLM:
             content = str(result)
         return content
 
-    def _parse_template_output(self, parser, content, full_prompt=None, max_retry=5, **kwargs):
+    def _parse_template_output(self, parser, caller, content, full_prompt=None, max_retry=5, **kwargs):
+        if caller:
+            tool_name, tool_result = caller.call(content)
+            if tool_result is not None:
+                return {"tool_name": tool_name, "tool_result": tool_result, "llm_output": content}
+
         if parser:
             parsed = parser.validate(content)
             retry_count = 0
@@ -93,7 +104,7 @@ class LLM:
         else:
             return content
 
-    def call(self, prompt, docs=None, parser=None, max_retry=2, **kwargs):
+    def call(self, prompt, docs=None, parser=None, caller=None, max_retry=2, **kwargs):
         """
         通用问答接口。
         - prompt: 用户问题
@@ -102,10 +113,10 @@ class LLM:
         - model_map: 可选，模板变量对应的pydantic模型字典。
         - max_retry: 模板解析失败时最大重试次数
         """
-        full_prompt = self._build_prompt(prompt, docs, parser)
+        full_prompt = self._build_prompt(prompt, docs, parser, caller)
         content = self._invoke_llm(full_prompt, **kwargs)
         self.history.append({"prompt": prompt, "response": content})
-        return self._parse_template_output(parser, content, full_prompt=full_prompt, max_retry=max_retry, **kwargs)
+        return self._parse_template_output(parser, caller, content, full_prompt=full_prompt, max_retry=max_retry, **kwargs)
 
     def get_embedding(self, text):
         return get_embedding(text)
@@ -116,8 +127,25 @@ class LLM:
     def get_history(self):
         return self.history
 
+
+
+
 # 用法示例
 if __name__ == "__main__":
+
+    # 定义工具函数
+    def add(a: float, b: float) -> float:
+        return a + b
+
+    def echo(text: str) -> str:
+        return text
+
+    def multiply(a: float, b: float) -> float:
+        return a * b
+
+    # 构建工具调用器，只允许调用 add、echo、multiply
+    caller = LLMToolCaller([add, echo, multiply])
+
     llm = LLM()
 
     """模型调用示例"""
@@ -144,23 +172,22 @@ if __name__ == "__main__":
     template = "姓名={name:str}，年龄={age:int}，模型={model:json:MyModel}，激活={active:bool}"
     parser = TemplateParser(template, model_map={"MyModel": MyModel})
     query = "请输出一个用户信息示例"
-    result = llm.call(query, parser=parser)
+    result = llm.call(query, parser=parser, caller=caller)
     print("\n【结构化解析】\n", result)
 
 
     """表格结构化解析示例"""
     table_query = "请输出10行以上的表格内容。"
     table_parser = TableParser(TableModel, value_only=True)
-    table_result = llm.call(table_query, parser=table_parser)
+    table_result = llm.call(table_query, parser=table_parser,caller=caller)
     print("\n【表格解析】\n", table_result)
     rows = table_result['data']['table']['rows']
     print("\ntsv格式输出：")
     print(table_parser.to_tsv(rows))
-    print("\ncsv格式输出：")
-    print(table_parser.to_csv(rows))
-    print("\nmarkdown格式输出：")
-    print(table_parser.to_markdown(rows))
-    print("\njson格式输出：")
-    print(table_parser.to_json(rows))
 
 
+    """工具自动调用示例"""
+    
+    tool_query = "请帮我计算 3 加 5"
+    tool_result = llm.call(tool_query, parser=parser, caller=caller)
+    print("\n【工具自动调用】\n", tool_result)

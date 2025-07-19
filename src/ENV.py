@@ -15,6 +15,7 @@ embedding_api_key = 'sk-ebd1315a8a6a4ae3832e8aa0d2482d28'
 embedding_default_model = 'text-embedding-v4'
 embedding_dimensions = 3072
 
+USE_LANGCHAIN = False
 LANGCHAIN_TRACING_V2 = "true"
 LANGCHAIN_ENDPOINT = "https://api.smith.langchain.com"
 LANGCHAIN_API_KEY = "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"

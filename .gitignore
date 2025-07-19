@@ -1,3 +1,5 @@
 **/__pycache__
 .pytest_cache/
 rag_chroma_db/
+llm_testcase.egg-info/
+build/

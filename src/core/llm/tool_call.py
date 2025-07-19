@@ -82,8 +82,8 @@ class LLMToolCaller:
         self.model_map = {model.__name__: model for model in self.param_models.values()}
         self.parser = TemplateParser(self.template, model_map=self.model_map)
         self.instructions = (
-            "[以下是工具调用格式的说明]\n"
-            + "注意：如果没有任何一个工具能满足你的需求，请直接回复原始内容，不要调用 tool_call, 忽略以下内容，不要在回答中提到工具这件事。\n"
+            "\n\n[以下是工具调用格式的说明（可根据情况忽略）]\n"
+            + "注意：如果没有任何一个工具能满足你的需求，请直接按原来的要求回复原始内容，不要调用 tool_call, 忽略以下内容，不要在回答中提到工具这件事。\n"
             + self.parser.get_format_instructions()
             + "\n不同工具的args示例：\n" + self.example
         )
@@ -113,18 +113,7 @@ class LLMToolCaller:
         return self.instructions
 
 
-# 示例工具函数（无需手动定义参数模型）
-@register_tool("add")
-def add(a: float, b: float):
-    return a + b
 
-@register_tool("echo")
-def echo(text: str):
-    return f"你说的是: {text}"
-
-@register_tool("multiply")
-def multiply(x: float, y: float):
-    return x * y
 
 
 def run_llm_tool_console(tools):
@@ -149,5 +138,17 @@ def run_llm_tool_console(tools):
 
 
 if __name__ == "__main__":
+    # 示例工具函数（无需手动定义参数模型）
+    @register_tool("add")
+    def add(a: float, b: float):
+        return a + b
+
+    @register_tool("echo")
+    def echo(text: str):
+        return f"你说的是: {text}"
+
+    @register_tool("multiply")
+    def multiply(x: float, y: float):
+        return x * y
     # 只允许调用 add、echo、multiply
     run_llm_tool_console([add, echo, multiply])

@@ -68,3 +68,38 @@ def test_table_output_empty():
     assert isinstance(rows, list)
     # 允许空表格
     assert len(rows) == 0 or rows is not None
+
+
+def test_tool_call_add():
+    from ..llm import LLM
+    from ..tool_call import LLMToolCaller
+
+    def add(a: float, b: float) -> float:
+        return a + b
+
+    def echo(text: str) -> str:
+        return text
+
+    def multiply(a: float, b: float) -> float:
+        return a * b
+
+    caller = LLMToolCaller([add, echo, multiply])
+    llm = LLM()
+    result = llm.call("请帮我计算 3 加 5", caller=caller)
+    assert isinstance(result, dict)
+    assert result.get("tool_name") == "add"
+    assert result.get("tool_result") == 8.0
+
+def test_tool_call_echo():
+    from ..llm import LLM
+    from ..tool_call import LLMToolCaller
+
+    def echo(text: str) -> str:
+        return text
+
+    caller = LLMToolCaller([echo])
+    llm = LLM()
+    result = llm.call("请使用工具重复输出：你好", caller=caller)
+    assert isinstance(result, dict)
+    assert result.get("tool_name") == "echo"
+    assert "你好" in result.get("tool_result", "")

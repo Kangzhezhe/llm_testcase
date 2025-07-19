@@ -210,15 +210,9 @@ def show_chroma_collection(
 def main():
 
     file_list = [
-        {"file_path":"D:\\testcase\\aitestcases\\data\\需求文件\\需求分析报告-湖北中烟新型烟草产品调研与开发信息反馈系统项目.docx",
-         "type":"需求文档"
-        },
-        {"file_path":"D:\\testcase\\aitestcases\\data\\需求文件\\湖北中烟工程中心数字管理应用用户操作手册v1.0.docx",
-         "type":"用户手册"
-        },
-        {"file_path":"D:\\testcase\\aitestcases\\data\\需求文件\\数字信息化管理应用系统接口文档.docx",
-         "type":"技术文档"
-        }
+        {"file_path":"data/需求文件/需求分析报告-湖北中烟新型烟草产品调研与开发信息反馈系统项目.docx", "type":"需求文档"},
+        {"file_path":"data/需求文件/湖北中烟工程中心数字管理应用用户操作手册v1.0.docx", "type":"用户手册"},
+        {"file_path":"data/需求文件/数字信息化管理应用系统接口文档.docx", "type":"技术文档"}
     ]
 
     collection = build_multi_file_knowledge_base(file_list)
@@ -227,7 +221,7 @@ def main():
         query = input("请输入你的问题（exit退出）：").strip()
         if query.lower() == "exit":
             break
-        docs = search_knowledge_base(query, collection)
+        docs = search_knowledge_base(query, collection_name="rag_demo")
         print("\n【检索到的知识块】")
         for i, doc in enumerate(docs):
             print(f"Top{i+1}:\n{doc}\n------")
