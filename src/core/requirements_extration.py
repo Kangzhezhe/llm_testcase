@@ -1,6 +1,5 @@
 import os
 import sys
-from src.ENV import llm_url, llm_api_key, llm_default_model
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
@@ -50,7 +49,7 @@ def main():
     with open("requirements.md", "w", encoding="utf-8") as f:
         f.write(md_content)
 
-    print("\n初次结构化提取完成，已写入 requirements.tsv/csv/md/json")
+    print("\n初次结构化提取完成，已写入 requirements.md")
     print(md_content)
 
 

@@ -1,4 +1,10 @@
-from src.ENV import llm_url, llm_api_key, llm_default_model
+from src.ENV import *
+import os
+os.environ["LANGCHAIN_TRACING_V2"] = LANGCHAIN_TRACING_V2
+os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
+os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
+os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
+
 from langchain_openai import ChatOpenAI
 from .rag import get_embedding, search_knowledge_base, build_multi_file_knowledge_base
 from .template_parser.template_parser import TemplateParser, MyModel
