@@ -81,13 +81,14 @@ class TableParser:
         headers = list(self.row_model.model_fields.keys())
         rows = []
         for m in matches:
-            items = [x.strip() for x in m.split(",")]
+            # 支持逗号在引号内的字段
+            items = re.findall(r'"[^"]*"|\'[^\']*\'|[^,]+', m)
+            items = [x.strip().strip('"').strip("'") for x in items]
             if len(items) != len(headers):
                 continue
             row = {}
             try:
                 for h, v in zip(headers, items):
-                    v = v.strip('"').strip("'")
                     typ = self.row_model.model_fields[h].annotation
                     if typ == int:
                         v = int(v)
@@ -97,9 +98,9 @@ class TableParser:
                 rows.append(row)
             except Exception as e:
                 if self.skip_on_type_error:
-                    continue  # 类型转换失败则跳过该行
+                    continue
                 else:
-                    raise e  # 类型转换失败则抛出异常
+                    raise e
         return rows
 
     def to_tsv(self, llm_output) -> str:

@@ -322,3 +322,41 @@ def test_multi_level_nested_model():
     result = parser.validate(llm_output)
     assert result["success"]
     assert result["data"]["nested"]["l2"]["l3"]["value"] == 123
+
+def test_json_field_with_comma_in_value():
+    class ModelWithComma(BaseModel):
+        foo: str
+        num: int
+    template = "数据={data:json:ModelWithComma}。"
+    llm_output = '数据={"foo": "A, 1", "num": 1}。'
+    parser = TemplateParser(template, model_map={"ModelWithComma": ModelWithComma})
+    result = parser.validate(llm_output)
+    assert result["success"]
+    assert result["data"]["data"]["foo"] == "A, 1"
+    assert result["data"]["data"]["num"] == 1
+
+def test_json_field_with_bracket_in_value():
+    class ModelWithBracket(BaseModel):
+        foo: str
+        num: int
+    template = "数据={data:json:ModelWithBracket}。"
+    llm_output = '数据={"foo": "[A]", "num": 2}。'
+    parser = TemplateParser(template, model_map={"ModelWithBracket": ModelWithBracket})
+    result = parser.validate(llm_output)
+    assert result["success"]
+    assert result["data"]["data"]["foo"] == "[A]"
+    assert result["data"]["data"]["num"] == 2
+
+def test_json_field_with_nested_object_and_comma():
+    class Nested(BaseModel):
+        bar: str
+    class ModelWithNested(BaseModel):
+        foo: Nested
+        num: int
+    template = "数据={data:json:ModelWithNested}。"
+    llm_output = '数据={"foo": {"bar": "baz, qux"}, "num": 3}。'
+    parser = TemplateParser(template, model_map={"ModelWithNested": ModelWithNested, "Nested": Nested})
+    result = parser.validate(llm_output)
+    assert result["success"]
+    assert result["data"]["data"]["foo"]["bar"] == "baz, qux"
+    assert result["data"]["data"]["num"] == 3

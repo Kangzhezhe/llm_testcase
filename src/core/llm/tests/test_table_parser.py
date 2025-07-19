@@ -160,3 +160,33 @@ def test_to_json_empty():
     table_field = parser.table_field
     assert table_field in data
     assert data[table_field] == []
+
+
+def test_json_field_with_comma_in_value():
+    # 字段值中包含逗号，不能被分割符截断
+    llm_output = '{"rows": [{"foo": "A,1", "num": 1}, {"foo": "B,2", "num": 2}]}'
+    parser = TableParser(TableModel)
+    result = parser.validate(llm_output)
+    assert result["success"]
+    assert result["data"]["table"]["rows"][0]["foo"] == "A,1"
+    assert result["data"]["table"]["rows"][1]["foo"] == "B,2"
+
+def test_list_field_with_bracket_in_value():
+    # 列表字段值中包含方括号
+    llm_output = '{"rows": [{"foo": "[A]", "num": 1}, {"foo": "[B]", "num": 2}]}'
+    parser = TableParser(TableModel)
+    result = parser.validate(llm_output)
+    assert result["success"]
+    assert result["data"]["table"]["rows"][0]["foo"] == "[A]"
+    assert result["data"]["table"]["rows"][1]["foo"] == "[B]"
+
+
+def test_list_field_with_comma_in_value_only():
+    # value_only模式下，列表字段值中包含逗号
+    llm_output = '{ {"A,1",1}, {"B,2",2} }'
+    parser = TableParser(TableModel, value_only=True)
+    result = parser.validate(llm_output)
+    print(result)
+    assert result["success"]
+    assert result["data"]["table"]["rows"][0]["foo"] == "A,1"
+    assert result["data"]["table"]["rows"][1]["foo"] == "B,2"

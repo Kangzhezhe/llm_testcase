@@ -108,12 +108,50 @@ class TemplateParser:
                         raise ValueError(f"未找到字段 {name} 的 JSON/dict 值")
 
             if seg_end:
-               # 用 find 找下一个分隔符
-                next_pos = matched_output.find(seg_end, idx)
-                if next_pos == -1 or next_pos < idx:
-                    raise ValueError(f"输出格式错误，缺少 '{seg_end}'")
-                value = matched_output[idx:next_pos].strip()
-                idx = next_pos
+                remain = matched_output[idx:]
+                # 优先处理复杂类型
+                if (typ == dict or typ == Any or (isinstance(typ, type) and issubclass(typ, BaseModel))) and remain.startswith("{"):
+                    count = 0
+                    for i, c in enumerate(remain):
+                        if c == "{":
+                            count += 1
+                        elif c == "}":
+                            count -= 1
+                            if count == 0:
+                                value = remain[:i+1].strip()
+                                idx += i+1
+                                break
+                    else:
+                        # 没有闭合，退回分割符处理
+                        next_pos = remain.find(seg_end)
+                        if next_pos == -1:
+                            raise ValueError(f"输出格式错误，缺少 '{seg_end}'")
+                        value = remain[:next_pos].strip()
+                        idx += next_pos
+                elif typ in [List[str], List[int]] and remain.startswith("["):
+                    count = 0
+                    for i, c in enumerate(remain):
+                        if c == "[":
+                            count += 1
+                        elif c == "]":
+                            count -= 1
+                            if count == 0:
+                                value = remain[:i+1].strip()
+                                idx += i+1
+                                break
+                    else:
+                        next_pos = remain.find(seg_end)
+                        if next_pos == -1:
+                            raise ValueError(f"输出格式错误，缺少 '{seg_end}'")
+                        value = remain[:next_pos].strip()
+                        idx += next_pos
+                else:
+                    # 统一用分割符处理
+                    next_pos = remain.find(seg_end)
+                    if next_pos == -1:
+                        raise ValueError(f"输出格式错误，缺少 '{seg_end}'")
+                    value = remain[:next_pos].strip()
+                    idx += next_pos
             else:
                 # 自动识别类型结尾
                 remain = matched_output[idx:]
@@ -240,7 +278,6 @@ class TemplateParser:
             "json": "{\"foo\": \"bar\", \"num\": 1}",
             "any": "{\"foo\": \"bar\"}"
         }
-        json_schemas = {}
         for name, field in self.fields.items():
             typ = field[0]
             typ_str = getattr(typ, "__name__", str(typ))
@@ -249,7 +286,6 @@ class TemplateParser:
                 fields = list(typ.model_fields.keys())
                 value_dict = {f: f"示例值" for f in fields}
                 value = json.dumps(value_dict, ensure_ascii=False)
-                json_schemas[name] = typ.model_json_schema()
             elif typ_str == "list":
                 if typ.__args__[0] == str:
                     value = example_values["list[str]"]
@@ -267,10 +303,12 @@ class TemplateParser:
                 value = "示例内容"
             example = re.sub(rf"\{{{name}:[^\}}]+\}}", value, example)
         instructions +=  example 
-        if json_schemas:
-            instructions += "\njson 类型变量的 schema 如下：\n"
-            for name, schema in json_schemas.items():
-                instructions += f"{name} field 的 schema:\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n"
+        if self.model_map:
+            instructions += "\n所有可用 json 类型变量的 schema 如下：\n"
+            for model_name, model_cls in self.model_map.items():
+                if issubclass(model_cls, BaseModel):
+                    schema = model_cls.model_json_schema()
+                    instructions += f"{model_name} 的 schema:\n{json.dumps(schema, ensure_ascii=False)}\n"
         return instructions
 
 
