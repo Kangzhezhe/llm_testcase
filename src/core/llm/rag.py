@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from openai import OpenAI
 import chromadb
 from chromadb.utils import embedding_functions
@@ -46,7 +47,7 @@ def search_knowledge_base(
     collection = chroma_client.get_or_create_collection(collection_name)
     results = collection.query(
         query_embeddings=[query_emb],
-        n_results=top_k * 3,
+        n_results=min(top_k * 3, collection.count()),
         include=["documents", "distances"]
     )
     docs = results["documents"][0]
@@ -59,7 +60,18 @@ def search_knowledge_base(
             meta = doc_json.get("metadata", {})
             meta_ok = True
             if meta_filter is not None and isinstance(meta_filter, dict):
-                meta_ok = all(meta.get(k) == v for k, v in meta_filter.items())
+                for k, v in meta_filter.items():
+                    meta_value = meta.get(k, "")
+                    # 支持正则表达式
+                    if isinstance(v, str) and v.startswith("re:"):
+                        pattern = v[3:]
+                        if not re.search(pattern, str(meta_value)):
+                            meta_ok = False
+                            break
+                    else:
+                        if meta_value != v:
+                            meta_ok = False
+                            break
             if meta_ok:
                 filtered.append(doc)
         except Exception:
@@ -201,7 +213,18 @@ def show_chroma_collection(
         meta = doc_json.get("metadata", {})
         meta_ok = True
         if meta_filter is not None and isinstance(meta_filter, dict):
-            meta_ok = all(meta.get(k) == v for k, v in meta_filter.items())
+            for k, v in meta_filter.items():
+                meta_value = meta.get(k, "")
+                # 支持正则表达式
+                if isinstance(v, str) and v.startswith("re:"):
+                    pattern = v[3:]
+                    if not re.search(pattern, str(meta_value)):
+                        meta_ok = False
+                        break
+                else:
+                    if meta_value != v:
+                        meta_ok = False
+                        break
         if meta_ok:
             results.append(doc_json)
     return results

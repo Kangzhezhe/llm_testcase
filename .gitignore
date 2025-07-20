@@ -3,3 +3,4 @@
 rag_chroma_db/
 llm_testcase.egg-info/
 build/
+output/

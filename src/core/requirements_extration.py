@@ -13,7 +13,6 @@ class RequirementRow(BaseModel):
     index: int = Field(..., description="序号，从1开始依次递增")
     module: str = Field(..., description="模块名称")
     requirement: str = Field(..., description="需求点")
-    requirement_text: str = Field(..., description="原始需求文本")
 
 class RequirementTableModel(BaseModel):
     rows: List[RequirementRow]
@@ -21,7 +20,7 @@ class RequirementTableModel(BaseModel):
 def extract_requirements(document: str, llm: LLM, table_parser: TableParser):
     prompt = (
         "你是专业的需求分析师。\n"
-        "请从以下文档中，提取所有模块名称及对应的需求点，与原始需求文本，输出结构化表格数据。\n"
+        "请从以下文档中，提取所有模块名称及对应的需求点，输出结构化表格数据。\n"
         "不要输出多余文字，只输出结构化表格。\n"
         "\n文档如下：\n" + document
     )
@@ -39,6 +38,7 @@ def main():
 
     # 提取需求
     rows = extract_requirements(prd_content, llm, table_parser)
+    print(rows)
     
     md_content = table_parser.to_markdown(rows)
     md_lines = md_content.splitlines()

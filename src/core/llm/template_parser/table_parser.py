@@ -11,8 +11,6 @@ class RowModel(BaseModel):
     foo: str
     num: int
 
-
-# 表格整体模型
 class TableModel(BaseModel):
     rows: List[RowModel]
 
