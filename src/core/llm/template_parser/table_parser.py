@@ -54,7 +54,6 @@ class TableParser:
                 "每个字段值之间用英文逗号分隔，字符串请用英文双引号括起来，数字直接填写。\n"
                 "例如：\n"
                 "{ " + example_row + " }\n"
-                "{ " + example_row + " }\n"
                 "如果有多行，可以用逗号分隔所有大括号，或放在一个列表中，如：\n"
                 "{ [" + "{ " + example_row + " }, { " + example_row + " }] }\n"
                 "注意：不要返回字段名，只返回字段值，字段顺序必须与上面一致。\n"
@@ -84,6 +83,8 @@ class TableParser:
             # 支持逗号在引号内的字段
             items = re.findall(r'"[^"]*"|\'[^\']*\'|[^,]+', m)
             items = [x.strip().strip('"').strip("'") for x in items]
+            if len(items) > len(headers) and items[-1] == "":
+                items = items[:-1]
             if len(items) != len(headers):
                 continue
             row = {}
