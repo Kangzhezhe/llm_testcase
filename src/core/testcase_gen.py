@@ -12,6 +12,7 @@ from llm.llm import LLM
 
 from requirements_extration import RequirementRow, RequirementTableModel
 from collections import defaultdict
+from tqdm import tqdm
 
 
 class TestcaseRow(BaseModel):
@@ -88,6 +89,9 @@ if __name__ == "__main__":
         )
         table_parser = TableParser(TestcaseTableModel, value_only=True)
         answer = llm.call(prompt, docs=docs, parser=table_parser)
+        if not answer or not isinstance(answer, dict) or "data" not in answer:
+            print(f"生成测试用例失败，需求点：{req.requirement}")
+            return []
         rows = answer['data']['table']['rows']
         return rows
 
@@ -95,13 +99,10 @@ if __name__ == "__main__":
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(generate_testcase, req) for req in model.rows]
-        for future in concurrent.futures.as_completed(futures):
+        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="生成测试用例"):
             rows = future.result()
-            print(rows)
             all_testcases.extend(rows)
 
-    import ipdb; ipdb.set_trace()
-    
     # 按 (模块, 需求点) 分组
     grouped = defaultdict(list)
     for row in all_testcases:
@@ -122,7 +123,3 @@ if __name__ == "__main__":
         md_content = "\n".join(md_lines)
     with open("output/testcase.md", "w", encoding="utf-8") as f:
         f.write(md_content)
-
-    csv_content = table_parser.to_csv(final_rows)
-    with open("output/testcase.csv", "w", encoding="utf-8") as f:
-        f.write(csv_content)
