@@ -15,7 +15,11 @@ def infer_param_model(func):
     fields = {}
     for name, param in sig.parameters.items():
         ann = param.annotation if param.annotation != inspect.Parameter.empty else str
-        fields[name] = (ann, ...)
+        # 处理默认值
+        if param.default != inspect.Parameter.empty:
+            fields[name] = (ann, param.default)
+        else:
+            fields[name] = (ann, ...)
     model = create_model(f"{func.__name__.capitalize()}Params", **fields)
     return model
 

@@ -259,7 +259,7 @@ class TemplateParser:
     def get_format_instructions(self):
         instructions = (
             "请严格按照如下格式输出：\n"
-            "变量值需替换模板中的变量定义部分（如 {name:str}），其他内容保持完全一致，包括所有标点符号。\n"
+            "变量值需替换模板中的变量定义部分（如 {name:str}），其他内容保持所有字符完全一致，包括所有标点符号及其中英文差别\n"
             "例如：\"姓名={name:str}，年龄={age:int}。\"替换为\"姓名=张三，年龄=18。\"\n"
             "如遇 json 类型变量，请直接嵌入合法 JSON，特殊字符需正确转义，且需符合指定 schema。\n\n"
             "模板如下：\n"
