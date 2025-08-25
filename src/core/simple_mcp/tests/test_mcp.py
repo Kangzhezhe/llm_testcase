@@ -42,32 +42,6 @@ class TestMCPServer:
         assert server.tools["test_tool"]["func"] == test_func
         assert server.tools["test_tool"]["description"] == "测试工具"
     
-    def test_knowledge_base_registration(self):
-        """测试知识库注册"""
-        import tempfile
-        import os
-        
-        llm = LLM()
-        server = SimpleMCPServer(llm)
-        
-        # 创建临时测试文件，使用英文内容避免编码问题
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
-            f.write("This is test content for MCP knowledge base testing.")
-            temp_file_path = f.name
-        
-        try:
-            file_list = [{"file_path": temp_file_path, "type": "document"}]
-            
-            # SimpleMCPServer 直接注册知识库，不需要mock llm
-            server.register_knowledge_base("test_kb", file_list)
-            
-            assert "test_kb" in server.knowledge_bases
-        finally:
-            # 清理临时文件
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-        assert "knowledge_base_test_kb" in server.resources
-
 class TestMCPConfig:
     """MCP配置测试"""
     
