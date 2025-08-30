@@ -1,5 +1,7 @@
 from src.ENV import *
 import os
+import asyncio
+from typing import List, Dict, Any, Optional, Union
 
 if USE_LANGCHAIN:
     os.environ["LANGCHAIN_TRACING_V2"] = LANGCHAIN_TRACING_V2
@@ -14,6 +16,13 @@ from .template_parser.table_parser import TableModel, TableParser
 from langchain_core.callbacks import BaseCallbackHandler
 from .tool_call import LLMToolCaller
 
+# 尝试导入MCP相关模块
+try:
+    from .mcp_client import MCPToolCaller, MCPServerConfig
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
+
 class CustomCallbackHandler(BaseCallbackHandler):
     def on_llm_start(self, serialized, prompts, **kwargs):
         print("\n====== LLM 开始 ======")
@@ -24,7 +33,17 @@ class CustomCallbackHandler(BaseCallbackHandler):
         print(f"输出：{response.generations}")
 
 class LLM:
-    def __init__(self, model=None, temperature=0.3, history_len=0, logger=False):
+    def __init__(self, model=None, temperature=0.3, history_len=0, logger=False, mcp_configs=None):
+        """
+        初始化LLM类，支持传统工具调用和MCP工具调用
+        
+        Args:
+            model: 模型名称
+            temperature: 温度参数
+            history_len: 历史记录长度
+            logger: 是否启用日志
+            mcp_configs: MCP服务器配置列表
+        """
         self.llm = ChatOpenAI(
             base_url=llm_url,
             api_key=llm_api_key,
@@ -35,6 +54,56 @@ class LLM:
         self.history = []
         self.history_len = history_len
         self.logger = logger
+        
+        # MCP支持
+        self.mcp_caller = None
+        self.mcp_configs = mcp_configs
+        self._mcp_initialized = False
+        
+        if mcp_configs and MCP_AVAILABLE:
+            self.mcp_caller = MCPToolCaller(mcp_configs)
+
+    async def init_mcp(self):
+        """初始化MCP连接（异步）"""
+        if self.mcp_caller and not self._mcp_initialized:
+            try:
+                await self.mcp_caller.connect_servers()
+                self._mcp_initialized = True
+                if self.logger:
+                    print("MCP服务器连接成功")
+            except Exception as e:
+                if self.logger:
+                    print(f"MCP服务器连接失败: {e}")
+                self.mcp_caller = None
+    
+    async def cleanup_mcp(self):
+        """清理MCP连接（异步）"""
+        if self.mcp_caller and self._mcp_initialized:
+            try:
+                await self.mcp_caller.disconnect_servers()
+                self._mcp_initialized = False
+                if self.logger:
+                    print("MCP服务器连接已断开")
+            except Exception as e:
+                if self.logger:
+                    print(f"MCP服务器断开连接失败: {e}")
+    
+    def _ensure_mcp_initialized(self):
+        """确保MCP已初始化（同步方法中使用）"""
+        if self.mcp_caller and not self._mcp_initialized:
+            try:
+                # 尝试在事件循环中运行
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # 如果循环正在运行，创建任务但不等待
+                    asyncio.create_task(self.init_mcp())
+                else:
+                    # 如果没有运行的循环，直接运行
+                    loop.run_until_complete(self.init_mcp())
+            except Exception as e:
+                if self.logger:
+                    print(f"MCP初始化失败: {e}")
+                self.mcp_caller = None
 
     def build_knowledge_base(self, file_list, persist_dir="rag_chroma_db", collection_name="rag_demo", max_len=1000, overlap=100):
         self.file_list = file_list
@@ -104,19 +173,39 @@ class LLM:
         else:
             return content
 
-    def call(self, prompt, docs=None, parser=None, caller=None, max_retry=2, **kwargs):
+    def call(self, prompt, docs=None, parser=None, caller=None, use_mcp=False, max_retry=2, **kwargs):
         """
-        通用问答接口。
-        - prompt: 用户问题
-        - docs: 可选，知识块列表。传入则自动拼接为RAG问答，否则普通对话。
-        - template: 可选，结构化输出模板字符串。指定则用TemplateParser解析输出，并用格式指导。
-        - model_map: 可选，模板变量对应的pydantic模型字典。
-        - max_retry: 模板解析失败时最大重试次数
+        通用问答接口，支持传统工具调用和MCP工具调用
+        
+        Args:
+            prompt: 用户问题
+            docs: 可选，知识块列表。传入则自动拼接为RAG问答，否则普通对话
+            parser: 可选，结构化输出模板解析器
+            caller: 可选，传统工具调用器
+            use_mcp: 是否使用MCP工具（优先级高于传统工具）
+            max_retry: 模板解析失败时最大重试次数
         """
-        full_prompt = self._build_prompt(prompt, docs, parser, caller)
+        # 确定使用哪个工具调用器
+        effective_caller = None
+        
+        if use_mcp and self.mcp_caller:
+            # 确保MCP已初始化
+            self._ensure_mcp_initialized()
+            if self._mcp_initialized:
+                effective_caller = self.mcp_caller
+                if self.logger:
+                    print("使用MCP工具调用器")
+            else:
+                if self.logger:
+                    print("MCP未初始化，回退到传统工具调用器")
+                effective_caller = caller
+        else:
+            effective_caller = caller
+
+        full_prompt = self._build_prompt(prompt, docs, parser, effective_caller)
         content = self._invoke_llm(full_prompt, **kwargs)
         self.history.append({"prompt": prompt, "response": content})
-        return self._parse_template_output(parser, caller, content, full_prompt=full_prompt, max_retry=max_retry, **kwargs)
+        return self._parse_template_output(parser, effective_caller, content, full_prompt=full_prompt, max_retry=max_retry, **kwargs)
 
     def get_embedding(self, text):
         return get_embedding(text)
@@ -126,14 +215,59 @@ class LLM:
 
     def get_history(self):
         return self.history
+    
+    def get_available_tools(self, tool_type="all"):
+        """
+        获取可用工具列表
+        
+        Args:
+            tool_type: 工具类型 ("all", "mcp", "traditional")
+        """
+        tools = []
+        
+        if tool_type in ["all", "mcp"] and self.mcp_caller and self._mcp_initialized:
+            mcp_tools = self.mcp_caller.get_available_tools()
+            tools.extend([f"MCP: {tool}" for tool in mcp_tools])
+        
+        return tools
+    
+    def __enter__(self):
+        """上下文管理器支持"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文管理器清理"""
+        if self.mcp_caller and self._mcp_initialized:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.cleanup_mcp())
+                else:
+                    loop.run_until_complete(self.cleanup_mcp())
+            except Exception as e:
+                if self.logger:
+                    print(f"清理MCP连接时出错: {e}")
+
+
+# 便捷函数
+def create_llm_with_mcp(mcp_server_configs=None, **llm_kwargs):
+    """
+    创建支持MCP的LLM实例
+    
+    Args:
+        mcp_server_configs: MCP服务器配置列表
+        **llm_kwargs: LLM的其他参数
+    """
+    return LLM(mcp_configs=mcp_server_configs, **llm_kwargs)
 
 
 
 
 # 用法示例
 if __name__ == "__main__":
+    import asyncio
 
-    # 定义工具函数
+    # 定义传统工具函数
     def add(a: float, b: float) -> float:
         return a + b
 
@@ -143,51 +277,104 @@ if __name__ == "__main__":
     def multiply(a: float, b: float) -> float:
         return a * b
 
-    # 构建工具调用器，只允许调用 add、echo、multiply
-    caller = LLMToolCaller([add, echo, multiply])
+    # 构建传统工具调用器
+    traditional_caller = LLMToolCaller([add, echo, multiply])
 
-    llm = LLM()
+    async def run_examples():
+        # 创建MCP配置（如果需要）
+        mcp_configs = None
+        if MCP_AVAILABLE:
+            from .mcp_client import MCPServerConfig, MCPTransportType
+            mcp_configs = [
+                MCPServerConfig(
+                    name="demo",
+                    command="python",
+                    args=["-m", "src.core.llm.demo_mcp_server"],
+                    transport=MCPTransportType.STDIO
+                )
+            ]
 
-    """模型调用示例"""
-    answer = llm.call("你是谁")
-    print(answer)
+        # 创建LLM
+        llm = LLM(logger=True, mcp_configs=mcp_configs)
+        
+        try:
+            # 手动初始化MCP（可选）
+            if mcp_configs:
+                await llm.init_mcp()
 
-    """知识库使用示例"""
-    file_list = [
-        {"file_path":"data/需求文件/需求分析报告-湖北中烟新型烟草产品调研与开发信息反馈系统项目.docx", "type":"需求文档"},
-        {"file_path":"data/需求文件/湖北中烟工程中心数字管理应用用户操作手册v1.0.docx", "type":"用户手册"},
-        {"file_path":"data/需求文件/数字信息化管理应用系统接口文档.docx", "type":"技术文档"}
-    ]
-    llm.build_knowledge_base(file_list)
-    query = "请简要介绍用户手册的主要内容。"
-    docs = llm.search_knowledge(query, collection_name="rag_demo")
-    print("\n【检索到的知识块】")
-    for i, doc in enumerate(docs):
-        print(f"Top{i+1}:\n{doc}\n------")
-    answer = llm.call(query, docs=docs)
-    print("\n【RAG答案】\n", answer)
+            print("=== 普通对话示例 ===")
+            answer = llm.call("你是谁")
+            print(f"普通对话: {answer}")
 
+            print("\n=== 传统工具调用示例 ===")
+            tool_result = llm.call("请帮我计算 3 + 5", caller=traditional_caller)
+            print(f"传统工具结果: {tool_result}")
+
+            if MCP_AVAILABLE and mcp_configs:
+                print("\n=== MCP工具调用示例 ===")
+                mcp_result = llm.call("请帮我计算 10 * 2", use_mcp=True)
+                print(f"MCP工具结果: {mcp_result}")
+
+                print("\n=== 可用工具列表 ===")
+                all_tools = llm.get_available_tools()
+                print(f"所有工具: {all_tools}")
+
+            """知识库使用示例"""
+            file_list = [
+                {"file_path":"data/需求文件/需求分析报告-湖北中烟新型烟草产品调研与开发信息反馈系统项目.docx", "type":"需求文档"},
+                {"file_path":"data/需求文件/湖北中烟工程中心数字管理应用用户操作手册v1.0.docx", "type":"用户手册"},
+                {"file_path":"data/需求文件/数字信息化管理应用系统接口文档.docx", "type":"技术文档"}
+            ]
+            
+            # 注意：这里假设文件存在，实际使用时请确保文件路径正确
+            try:
+                llm.build_knowledge_base(file_list)
+                query = "请简要介绍用户手册的主要内容。"
+                docs = llm.search_knowledge(query, collection_name="rag_demo")
+                print("\n【检索到的知识块】")
+                for i, doc in enumerate(docs):
+                    print(f"Top{i+1}:\n{doc}\n------")
+                answer = llm.call(query, docs=docs)
+                print("\n【RAG答案】\n", answer)
+            except Exception as e:
+                print(f"知识库示例跳过（文件不存在）: {e}")
+
+            """结构化输出示例"""
+            template = "姓名={name:str}，年龄={age:int}，模型={model:json:MyModel}，激活={active:bool}"
+            parser = TemplateParser(template, model_map={"MyModel": MyModel})
+            query = "请输出一个用户信息示例"
+            result = llm.call(query, parser=parser, caller=traditional_caller)
+            print("\n【结构化解析】\n", result)
+
+            """表格结构化解析示例"""
+            table_query = "请输出10行以上的表格内容。"
+            table_parser = TableParser(TableModel, value_only=True)
+            table_result = llm.call(table_query, parser=table_parser, caller=traditional_caller)
+            print("\n【表格解析】\n", table_result)
+            if isinstance(table_result, dict) and 'data' in table_result:
+                rows = table_result['data']['table']['rows']
+                print("\ntsv格式输出：")
+                print(table_parser.to_tsv(rows))
+
+        finally:
+            # 清理MCP连接
+            await llm.cleanup_mcp()
+
+    # 同步方式使用（简化版本）
+    def sync_example():
+        print("\n=== 同步使用示例 ===")
+        
+        # 创建不带MCP的LLM
+        llm = LLM(logger=True)
+        
+        # 使用上下文管理器
+        with llm:
+            result = llm.call("Hello, world!", caller=traditional_caller)
+            print(f"同步结果: {result}")
+
+    # 运行异步示例
+    print("运行异步示例...")
+    asyncio.run(run_examples())
     
-    """结构化输出示例"""
-    template = "姓名={name:str}，年龄={age:int}，模型={model:json:MyModel}，激活={active:bool}"
-    parser = TemplateParser(template, model_map={"MyModel": MyModel})
-    query = "请输出一个用户信息示例"
-    result = llm.call(query, parser=parser, caller=caller)
-    print("\n【结构化解析】\n", result)
-
-
-    """表格结构化解析示例"""
-    table_query = "请输出10行以上的表格内容。"
-    table_parser = TableParser(TableModel, value_only=True)
-    table_result = llm.call(table_query, parser=table_parser,caller=caller)
-    print("\n【表格解析】\n", table_result)
-    rows = table_result['data']['table']['rows']
-    print("\ntsv格式输出：")
-    print(table_parser.to_tsv(rows))
-
-
-    """工具自动调用示例"""
-    
-    tool_query = "请帮我计算 3 加 5"
-    tool_result = llm.call(tool_query, parser=parser, caller=caller)
-    print("\n【工具自动调用】\n", tool_result)
+    # 运行同步示例
+    sync_example()

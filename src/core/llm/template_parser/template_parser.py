@@ -253,7 +253,7 @@ class TemplateParser:
             return {
                 "success": False,
                 "data": str(e),
-                "matched_output": llm_output
+                "matched_output": matched_output
             }
 
     def get_format_instructions(self):

@@ -1,12 +1,20 @@
 """
 智能代理模块 - 实现工具调用和自动重新生成机制
 支持在工具调用后重新生成LLM输出，直到获得非工具调用的聊天结果
+现在也支持MCP工具调用
 """
 import json
 from typing import List, Dict, Any, Optional, Callable, Union
 from .llm import LLM
 from .tool_call import LLMToolCaller
 from .template_parser.template_parser import TemplateParser
+
+# 尝试导入MCP相关模块
+try:
+    from .mcp_client import MCPServerConfig
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
 
 
 class Agent:
@@ -15,7 +23,7 @@ class Agent:
     在工具调用后会自动重新生成LLM输出，直到获得最终的聊天结果
     """
     
-    def __init__(self, model=None, temperature=0.3, history_len=5, logger=False, max_iterations=5, max_consecutive_tools=3):
+    def __init__(self, model=None, temperature=0.3, history_len=5, logger=False, max_iterations=5, max_consecutive_tools=3, mcp_configs=None):
         """
         初始化智能代理
         
@@ -26,13 +34,15 @@ class Agent:
             logger: 是否启用日志
             max_iterations: 最大迭代次数，防止无限循环
             max_consecutive_tools: 最多连续工具调用次数
+            mcp_configs: MCP服务器配置列表
         """
-        self.llm = LLM(model=model, temperature=temperature, history_len=history_len, logger=logger)
+        self.llm = LLM(model=model, temperature=temperature, history_len=history_len, logger=logger, mcp_configs=mcp_configs)
         self.tools = {}
         self.tool_caller = None
         self.max_iterations = max_iterations
         self.max_consecutive_tools = max_consecutive_tools
         self.conversation_history = []
+        self.mcp_configs = mcp_configs
         
     def register_tools(self, tools: List[Callable]):
         """
@@ -94,7 +104,7 @@ class Agent:
         return full_prompt
         
     def chat(self, prompt: str, docs: Optional[List] = None, parser: Optional[TemplateParser] = None, 
-             use_tools: bool = True, **kwargs) -> Dict[str, Any]:
+             use_tools: bool = True, use_mcp: bool = False, **kwargs) -> Dict[str, Any]:
         """
         智能对话接口，支持工具调用和自动重新生成
         
@@ -102,7 +112,8 @@ class Agent:
             prompt: 用户输入
             docs: 可选的知识库文档
             parser: 可选的模板解析器
-            use_tools: 是否启用工具调用
+            use_tools: 是否启用传统工具调用
+            use_mcp: 是否启用MCP工具调用
             **kwargs: 传递给LLM的其他参数
             
         Returns:
@@ -144,8 +155,18 @@ class Agent:
                     else:
                         effective_prompt = current_prompt
                 
-                # 调用LLM
-                if use_tools and self.tool_caller:
+                # 调用LLM - 支持MCP和传统工具
+                if use_mcp:
+                    # 优先使用MCP工具
+                    llm_response = self.llm.call(
+                        effective_prompt,
+                        docs=docs,
+                        parser=parser,
+                        use_mcp=True,
+                        **kwargs
+                    )
+                elif use_tools and self.tool_caller:
+                    # 使用传统工具
                     llm_response = self.llm.call(
                         effective_prompt,
                         docs=docs,
@@ -154,6 +175,7 @@ class Agent:
                         **kwargs
                     )
                 else:
+                    # 不使用工具
                     llm_response = self.llm.call(
                         effective_prompt,
                         docs=docs,
@@ -168,7 +190,8 @@ class Agent:
                         "name": llm_response["tool_name"],
                         "args": self._extract_tool_args(llm_response["llm_output"]),
                         "result": llm_response["tool_result"],
-                        "iteration": iteration
+                        "iteration": iteration,
+                        "type": "mcp" if use_mcp else "traditional"
                     }
                     result["tool_calls"].append(tool_call_info)
                     
@@ -271,7 +294,24 @@ class Agent:
     
     def get_available_tools(self) -> List[str]:
         """获取可用工具列表"""
-        return list(self.tools.keys())
+        tools = list(self.tools.keys())  # 传统工具
+        
+        # 添加MCP工具
+        if hasattr(self.llm, 'get_available_tools'):
+            mcp_tools = self.llm.get_available_tools("mcp")
+            tools.extend(mcp_tools)
+        
+        return tools
+    
+    async def init_mcp(self):
+        """初始化MCP连接"""
+        if hasattr(self.llm, 'init_mcp'):
+            await self.llm.init_mcp()
+    
+    async def cleanup_mcp(self):
+        """清理MCP连接"""
+        if hasattr(self.llm, 'cleanup_mcp'):
+            await self.llm.cleanup_mcp()
 
 
 # 便捷函数
@@ -288,10 +328,25 @@ def create_agent_with_tools(tools: List[Callable], **kwargs) -> Agent:
             - logger: 是否启用日志
             - max_iterations: 最大迭代次数
             - max_consecutive_tools: 最多连续工具调用次数
+            - mcp_configs: MCP服务器配置列表
     """
     agent = Agent(**kwargs)
     agent.register_tools(tools)
     return agent
+
+
+def create_agent_with_mcp(mcp_configs: List, **kwargs) -> Agent:
+    """
+    创建支持MCP的智能代理
+    
+    Args:
+        mcp_configs: MCP服务器配置列表
+        **kwargs: 传递给Agent的其他参数
+    """
+    if not MCP_AVAILABLE:
+        raise ImportError("MCP功能不可用，请检查fastmcp库是否已安装")
+    
+    return Agent(mcp_configs=mcp_configs, **kwargs)
 
 
 # 示例用法
