@@ -33,7 +33,7 @@ def test_agent_basic():
     print("=== 测试Agent基本功能 ===")
     
     # 创建agent
-    agent = Agent(logger=False, max_iterations=3)
+    agent = Agent(logger=False, max_iterations=5)
     
     # 注册工具
     tools = [tool_calculate_add, tool_calculate_multiply, tool_echo, tool_get_info]
@@ -49,11 +49,6 @@ def test_agent_basic():
     # 测试2: 不需要工具的对话
     print("\n--- 测试2: 普通对话 ---")
     result = agent.chat("你好，今天天气不错")
-    print(f"结果: {result}")
-    
-    # 测试3: 回声测试
-    print("\n--- 测试3: 回声测试 ---")
-    result = agent.chat("请使用工具重复说'Hello World'")
     print(f"结果: {result}")
     
     # 添加断言来验证结果

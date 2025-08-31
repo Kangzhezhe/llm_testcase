@@ -99,7 +99,7 @@ def test_tool_call_echo():
 
     caller = LLMToolCaller([echo])
     llm = LLM()
-    result = llm.call("请使用工具重复输出：你好", caller=caller)
+    result = llm.call("请使用工具输出：你好", caller=caller)
     assert isinstance(result, dict)
     assert result.get("tool_name") == "echo"
     assert "你好" in result.get("tool_result", "")

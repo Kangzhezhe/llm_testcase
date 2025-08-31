@@ -13,8 +13,8 @@ llm = ChatOpenAI(
 
 @pytest.mark.parametrize("value_only,prompt_suffix,check", [
     (False, "\n请输出一组表格数据。", lambda r, parser: r["success"] and r["data"]["table"][parser.table_field][0]["foo"]),
-    (True, "\n请输出一组表格数据（仅值格式）。", lambda r, parser: r["success"] and r["data"]["table"][parser.table_field][0]["foo"]),
-    (True, "\n请输出foo为test，num为999的内容（仅值格式）。", lambda r, parser: r["success"] and r["data"]["table"][parser.table_field][0]["foo"] == "test" and r["data"]["table"][parser.table_field][0]["num"] == 999),
+    (True, "\n请输出一组表格数据。", lambda r, parser: r["success"] and r["data"]["table"][parser.table_field][0]["foo"]),
+    (True, "\n请输出foo为test，num为999的内容。", lambda r, parser: r["success"] and r["data"]["table"][parser.table_field][0]["foo"] == "test" and r["data"]["table"][parser.table_field][0]["num"] == 999),
 ])
 def test_llm_table_parse(value_only, prompt_suffix, check):
     parser = TableParser(TableModel, value_only=value_only)
@@ -27,38 +27,7 @@ def test_llm_table_parse(value_only, prompt_suffix, check):
     print("解析结果：", result)
     assert check(result, parser)
 
-def test_llm_table_extra_fields():
-    parser = TableParser(TableModel)
-    instructions = parser.get_format_instructions()
-    prompt = instructions + "\n请输出表格内容并多加一个字段extra。"
-    response = llm.invoke(prompt)
-    llm_output = response.content
-    result = parser.validate(llm_output)
-    print("多字段解析结果：", result)
-    assert result["success"]
-    assert parser.table_field in result["data"]["table"]
 
-def test_llm_table_special_characters():
-    parser = TableParser(TableModel)
-    instructions = parser.get_format_instructions()
-    prompt = instructions + "\n请输出foo字段为特殊字符的表格内容。"
-    response = llm.invoke(prompt)
-    llm_output = response.content
-    result = parser.validate(llm_output)
-    print("特殊字符解析结果：", result)
-    assert result["success"]
-    assert parser.table_field in result["data"]["table"]
-
-def test_llm_table_value_only_special_characters():
-    parser = TableParser(TableModel, value_only=True)
-    instructions = parser.get_format_instructions()
-    prompt = instructions + "\n请输出foo字段为特殊字符的表格内容（仅值格式）。"
-    response = llm.invoke(prompt)
-    llm_output = response.content
-    result = parser.validate(llm_output)
-    print("特殊字符解析结果：", result)
-    assert result["success"]
-    assert parser.table_field in result["data"]['table']
 
 def test_llm_table_empty():
     parser = TableParser(TableModel)

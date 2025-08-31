@@ -3,7 +3,7 @@ from typing import List, Any, Type
 from pydantic import BaseModel, ValidationError
 import os
 import sys
-from .template_parser import TemplateParser, MyModel
+from .template_parser import TemplateParser, MyModel, strip_think_tags
 
 
 # 每行数据结构，支持int, str ,float等类型
@@ -37,6 +37,7 @@ class TableParser:
         self.parser = TemplateParser(self.template, model_map=model_map)
 
     def validate(self, llm_output: str):
+        llm_output = strip_think_tags(llm_output)
         if self.value_only:
             llm_output_1 = {self.table_field: self._parse_value_only(llm_output)}
             llm_output_json = json.dumps(llm_output_1, ensure_ascii=False)
@@ -164,7 +165,7 @@ def test_table_parser():
     # table_parser = TableParser(TableModel)
 
     llm_output = '{ [{"A",1}, {"B",2}] }'
-    table_parser = TableParser(TableModel, value_only=True)
+    table_parser = TableParser(TableModel)
     print(table_parser.get_format_instructions())
 
     print("原始解析：")

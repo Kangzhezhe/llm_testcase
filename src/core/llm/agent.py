@@ -155,8 +155,16 @@ class Agent:
                     else:
                         effective_prompt = current_prompt
                 
-                # 调用LLM - 支持MCP和传统工具
-                if use_mcp:
+                # 决定本轮是否允许工具调用：
+                # 如果当前是倒数第二次迭代（即 iteration == max_iterations - 1），
+                # 则不允许再调用任何工具，让模型直接基于已有上下文给出最终答案。
+                allow_tools_this_round = True
+                if iteration >= self.max_iterations - 1:
+                    # 到了最后一轮或倒数第二轮，不再允许工具调用
+                    allow_tools_this_round = False
+
+                # 调用LLM - 支持MCP和传统工具（根据 allow_tools_this_round 开关）
+                if use_mcp and allow_tools_this_round:
                     # 优先使用MCP工具
                     llm_response = self.llm.call(
                         effective_prompt,
@@ -165,7 +173,7 @@ class Agent:
                         use_mcp=True,
                         **kwargs
                     )
-                elif use_tools and self.tool_caller:
+                elif use_tools and self.tool_caller and allow_tools_this_round:
                     # 使用传统工具
                     llm_response = self.llm.call(
                         effective_prompt,
@@ -175,7 +183,7 @@ class Agent:
                         **kwargs
                     )
                 else:
-                    # 不使用工具
+                    # 不使用工具（包括倒数第二轮/最后一轮的保护）
                     llm_response = self.llm.call(
                         effective_prompt,
                         docs=docs,

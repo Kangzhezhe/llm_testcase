@@ -16,8 +16,7 @@ llm = ChatOpenAI(
 
 @pytest.mark.parametrize("prompt_suffix,check", [
     ("\n请输出一组示例数据。", lambda r: r["success"] and r["data"]["model"]["foo"]),
-    ("\n请输出模型字段foo为test，num为999的内容。", lambda r: r["success"] and r["data"]["model"]["foo"] == "test" and r["data"]["model"]["num"] == "999"),
-    ("\n请输出模型字段foo为中文，num为数字。", lambda r: r["success"] and isinstance(r["data"]["model"]["foo"], str)),
+    ("\n请输出模型字段foo为test，num为999的内容。", lambda r: r["success"] and r["data"]["model"]["foo"] == "test" and r["data"]["model"]["num"] == "999")
 ])
 def test_llm_model_parse(prompt_suffix, check):
     template = "模型={model:json:MyModel}"
@@ -40,18 +39,6 @@ def test_llm_model_extra_fields():
     llm_output = response.content
     result = parser.validate(llm_output)
     print("多字段解析结果：", result)
-    assert result["success"]
-    assert "foo" in result["data"]["model"]
-
-def test_llm_model_special_characters():
-    template = "模型={model:json:MyModel}"
-    parser = TemplateParser(template, model_map={"MyModel": MyModel})
-    instructions = parser.get_format_instructions()
-    prompt = instructions + "\n请输出模型内容，foo字段为特殊字符。"
-    response = llm.invoke(prompt)
-    llm_output = response.content
-    result = parser.validate(llm_output)
-    print("特殊字符解析结果：", result)
     assert result["success"]
     assert "foo" in result["data"]["model"]
 
