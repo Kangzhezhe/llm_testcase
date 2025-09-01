@@ -201,8 +201,8 @@ class MCPToolCaller:
         actual_tool_name = getattr(tool_data['tool_info'], 'name', None)
 
         try:
-            # result = await client.call_tool(actual_tool_name, kwargs, timeout=10)
-            result = await client.call_tool("calculate", {"operation": "add", "a": 10, "b": 20}, timeout=10)
+            result = await client.call_tool(actual_tool_name, kwargs, timeout=10)
+            # result = await client.call_tool("calculate", {"operation": "add", "a": 10, "b": 20}, timeout=10)
             return result
         except Exception as e:
             raise RuntimeError(f"调用MCP工具 {tool_name} 失败: {e}")
@@ -226,8 +226,6 @@ class MCPToolCaller:
                     data = parsed.get('data', {})
                     tool_name = data.get('name')
                     tool_args = data.get('args', {}) or {}
-                    print(f"call tool: {tool_name} {tool_args}")
-                    # result = self._run_async_in_sync(self.call_tool(tool_name, **tool_args))
                     result = await self.call_tool(tool_name, **tool_args)
                     return tool_name, result
 

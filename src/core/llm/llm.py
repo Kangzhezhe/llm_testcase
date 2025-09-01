@@ -154,9 +154,30 @@ class LLM:
             content = str(result)
         return content
 
+    async def _ainvoke_llm(self, full_prompt, **kwargs):
+        if self.logger:
+            result = await self.llm.ainvoke(full_prompt, **kwargs, config={"callbacks": [CustomCallbackHandler()]})
+        else:
+            result = await self.llm.ainvoke(full_prompt, **kwargs)
+
+        if hasattr(result, "content"):
+            content = result.content
+        elif isinstance(result, dict) and "content" in result:
+            content = result["content"]
+        else:
+            content = str(result)
+
+        return content
+
     def _parse_template_output(self, parser, caller, content, full_prompt=None, max_retry=5, **kwargs):
         if caller:
-            tool_name, tool_result = caller.call(content)
+            if hasattr(caller, 'call') and asyncio.iscoroutinefunction(caller.call):
+                raise RuntimeError(
+                    "检测到MCP工具调用需要异步执行，但当前在运行的事件循环中。"
+                    "请使用 'await llm.call_async()' 代替 'llm.call()'"
+                )
+            else:
+                tool_name, tool_result = caller.call(content)
             if tool_result is not None:
                 return {"tool_name": tool_name, "tool_result": tool_result, "llm_output": content}
 
@@ -206,6 +227,68 @@ class LLM:
         content = self._invoke_llm(full_prompt, **kwargs)
         self.history.append({"prompt": prompt, "response": content})
         return self._parse_template_output(parser, effective_caller, content, full_prompt=full_prompt, max_retry=max_retry, **kwargs)
+
+    async def _parse_template_output_async(self, parser, caller, content, full_prompt=None, max_retry=5, **kwargs):
+        """异步版本的模板输出解析"""
+        if caller:
+            if hasattr(caller, 'call') and asyncio.iscoroutinefunction(caller.call):
+                # MCP调用器使用异步调用
+                tool_name, tool_result = await caller.call(content)
+            else:
+                # 传统调用器使用同步调用
+                tool_name, tool_result = caller.call(content)
+            
+            if tool_result is not None:
+                return {"tool_name": tool_name, "tool_result": tool_result, "llm_output": content}
+
+        if parser:
+            parsed = parser.validate(content)
+            retry_count = 0
+            last_content = content
+            while isinstance(parsed, dict) and not parsed.get("success", True) and retry_count < max_retry:
+                retry_count += 1
+                # 重新生成
+                last_content = await self._ainvoke_llm(full_prompt, **kwargs)
+                parsed = parser.validate(last_content)
+            return parsed
+        else:
+            return content
+
+    async def call_async(self, prompt, docs=None, parser=None, caller=None, use_mcp=False, max_retry=2, **kwargs):
+        """
+        异步版本的通用问答接口，支持传统工具调用和MCP工具调用
+        
+        Args:
+            prompt: 用户问题
+            docs: 可选，知识块列表。传入则自动拼接为RAG问答，否则普通对话
+            parser: 可选，结构化输出模板解析器
+            caller: 可选，传统工具调用器
+            use_mcp: 是否使用MCP工具（优先级高于传统工具）
+            max_retry: 模板解析失败时最大重试次数
+        """
+        # 确定使用哪个工具调用器
+        effective_caller = None
+        
+        if use_mcp and self.mcp_caller:
+            # 确保MCP已初始化
+            if not self._mcp_initialized:
+                await self.init_mcp()
+            if self._mcp_initialized:
+                effective_caller = self.mcp_caller
+                if self.logger:
+                    print("使用MCP工具调用器")
+            else:
+                if self.logger:
+                    print("MCP未初始化，回退到传统工具调用器")
+                effective_caller = caller
+        else:
+            effective_caller = caller
+
+        full_prompt = self._build_prompt(prompt, docs, parser, effective_caller)
+        content = await self._ainvoke_llm(full_prompt, **kwargs)
+        self.history.append({"prompt": prompt, "response": content})
+        return await self._parse_template_output_async(parser, effective_caller, content, full_prompt=full_prompt, max_retry=max_retry, **kwargs)
+
 
     def get_embedding(self, text):
         return get_embedding(text)

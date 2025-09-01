@@ -88,6 +88,7 @@ class LLMToolCaller:
         self.instructions = (
             "\n\n[以下是工具调用格式的说明（可根据情况忽略）]\n"
             + "注意：如果没有任何一个工具能满足你的需求，请直接按原来的要求回复原始内容，不要调用 tool_call, 忽略以下内容，不要在回答中提到工具这件事。\n"
+            + "注意：一次只允许调用一个工具，如果回答中包含了多个工具调用，只会执行第一个\n"
             + self.parser.get_format_instructions()
             + "\n不同工具的args示例：\n" + self.example
         )

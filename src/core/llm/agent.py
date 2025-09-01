@@ -36,13 +36,14 @@ class Agent:
             max_consecutive_tools: 最多连续工具调用次数
             mcp_configs: MCP服务器配置列表
         """
-        self.llm = LLM(model=model, temperature=temperature, history_len=history_len, logger=logger, mcp_configs=mcp_configs)
+        self.llm = LLM(model=model, temperature=temperature, logger=logger, mcp_configs=mcp_configs)
         self.tools = {}
         self.tool_caller = None
         self.max_iterations = max_iterations
         self.max_consecutive_tools = max_consecutive_tools
         self.conversation_history = []
         self.mcp_configs = mcp_configs
+        self.history_len = history_len
         
     def register_tools(self, tools: List[Callable]):
         """
@@ -75,7 +76,7 @@ class Agent:
         # 构建对话历史
         history_text = ""
         if self.conversation_history:
-            for entry in self.conversation_history[-self.llm.history_len:]:
+            for entry in self.conversation_history[-self.history_len:]:
                 role = entry["role"]
                 content = entry["content"]
                 history_text += f"{role}: {content}\n"
@@ -103,10 +104,10 @@ class Agent:
             
         return full_prompt
         
-    def chat(self, prompt: str, docs: Optional[List] = None, parser: Optional[TemplateParser] = None, 
-             use_tools: bool = True, use_mcp: bool = False, **kwargs) -> Dict[str, Any]:
+    async def chat_async(self, prompt: str, docs: Optional[List] = None, parser: Optional[TemplateParser] = None, 
+                         use_tools: bool = True, use_mcp: bool = False, **kwargs) -> Dict[str, Any]:
         """
-        智能对话接口，支持工具调用和自动重新生成
+        异步智能对话接口，支持工具调用和自动重新生成
         
         Args:
             prompt: 用户输入
@@ -146,12 +147,171 @@ class Agent:
                 elif consecutive_tool_calls >= self.max_consecutive_tools:
                     # 连续工具调用过多，要求提供最终答案
                     tool_context = self._build_tool_context(result["tool_calls"])
-                    effective_prompt = f"{current_prompt}\n\n{tool_context}\n\n你已经调用了多个工具，请基于以上所有工具调用结果，提供最终答案，不要再次调用工具。"
+                    effective_prompt = f"{current_prompt}\n\n{tool_context}\n\n你已经调用了多个工具，请基于以上所有工具调用结果，直接提供最终答案，不要再次调用工具。"
                 else:
                     # 正常对话，可以继续调用工具
                     if result["tool_calls"]:
                         tool_context = self._build_tool_context(result["tool_calls"])
-                        effective_prompt = f"{current_prompt}\n\n{tool_context}\n\n如果需要更多信息可以继续调用工具，或者基于现有结果给出最终答案。"
+                        
+                        # 构建已调用工具及参数的简洁列表
+                        called_tools_info = []
+                        for call in result["tool_calls"]:
+                            tool_name = call['name']
+                            args = call.get('args', {})
+                            if args:
+                                args_str = ", ".join([f"{k}={v}" for k, v in args.items()])
+                                called_tools_info.append(f"{tool_name}({args_str})")
+                            else:
+                                called_tools_info.append(f"{tool_name}()")
+                        
+                        called_tools_summary = "、".join(called_tools_info)
+                        
+                        effective_prompt = f"""{current_prompt}
+
+                {tool_context}
+
+                ⚠️ 已调用过的工具及参数: {called_tools_summary}
+                请不要重复调用相同工具和相同参数。如果已有信息足够回答问题，请给出最终答案；如果需要更多信息，请调用新的工具或使用不同的参数。"""
+                    else:
+                        effective_prompt = current_prompt
+                
+                # 决定本轮是否允许工具调用
+                allow_tools_this_round = True
+                if iteration >= self.max_iterations - 1:
+                    # 到了最后一轮或倒数第二轮，不再允许工具调用
+                    allow_tools_this_round = False
+
+                # 调用LLM - 支持MCP和传统工具（根据 allow_tools_this_round 开关）
+                if use_mcp and allow_tools_this_round:
+                    # 优先使用MCP工具
+                    llm_response = await self.llm.call_async(
+                        effective_prompt,
+                        docs=docs,
+                        parser=parser,
+                        use_mcp=True,
+                        **kwargs
+                    )
+                elif use_tools and self.tool_caller and allow_tools_this_round:
+                    # 使用传统工具
+                    llm_response = await self.llm.call_async(
+                        effective_prompt,
+                        docs=docs,
+                        parser=parser,
+                        caller=self.tool_caller,
+                        **kwargs
+                    )
+                else:
+                    # 不使用工具（包括倒数第二轮/最后一轮的保护）
+                    llm_response = await self.llm.call_async(
+                        effective_prompt,
+                        docs=docs,
+                        parser=parser,
+                        **kwargs
+                    )
+                
+                # 检查是否为工具调用
+                if isinstance(llm_response, dict) and "tool_name" in llm_response:
+                    if use_mcp:
+                        caller = self.llm.mcp_caller
+                    else:
+                        caller = self.tool_caller
+                    tool_call_info = {
+                        "name": llm_response["tool_name"],
+                        "args": self._extract_tool_args(llm_response["llm_output"], caller),
+                        "result": llm_response["tool_result"],
+                        "iteration": iteration,
+                        "type": "mcp" if use_mcp else "traditional"
+                    }
+                    result["tool_calls"].append(tool_call_info)
+                    
+                    # 增加连续工具调用计数
+                    consecutive_tool_calls += 1
+                    
+                    # 如果是最后一次迭代，直接返回工具结果
+                    if iteration >= self.max_iterations:
+                        result["final_response"] = f"工具调用结果: {llm_response['tool_result']}"
+                        result["success"] = False
+                        result["error"] = "达到最大迭代次数"
+                        break
+                    
+                    # 继续下一轮
+                    continue
+                else:
+                    # 获得了最终的聊天结果
+                    result["final_response"] = llm_response
+                    consecutive_tool_calls = 0  # 重置计数
+                    break
+            
+            # 添加助手回复到历史
+            self._add_to_history(
+                "assistant", 
+                result["final_response"],
+                tool_calls=result["tool_calls"] if result["tool_calls"] else None
+            )
+            
+        except Exception as e:
+            result["success"] = False
+            result["error"] = str(e)
+            result["final_response"] = f"处理过程中出现错误: {e}"
+            
+        return result
+
+    def chat(self, prompt: str, docs: Optional[List] = None, parser: Optional[TemplateParser] = None, 
+             use_tools: bool = True, use_mcp: bool = False, **kwargs) -> Dict[str, Any]:
+        """
+        智能对话接口，支持工具调用和自动重新生成
+        
+        Args:
+            prompt: 用户输入
+            docs: 可选的知识库文档
+            parser: 可选的模板解析器
+            use_tools: 是否启用传统工具调用
+            use_mcp: 是否启用MCP工具调用
+            **kwargs: 传递给LLM的其他参数
+            
+        Returns:
+            包含最终结果和执行过程的字典
+        """
+        import asyncio
+        
+        # 如果使用MCP工具，则必须使用异步
+        if use_mcp:
+            raise RuntimeError("不能在已运行的事件循环中使用同步chat方法调用MCP工具，请使用chat_async方法")
+
+        # 对于传统工具调用，保持原来的同步实现
+        result = {
+            "final_response": "",
+            "tool_calls": [],
+            "iterations": 0,
+            "success": True,
+            "error": None
+        }
+        
+        try:
+            # 添加用户输入到历史
+            self._add_to_history("user", prompt)
+            
+            current_prompt = prompt
+            iteration = 0
+            consecutive_tool_calls = 0
+            
+            while iteration < self.max_iterations:
+                iteration += 1
+                result["iterations"] = iteration
+                
+                # 构建当前轮次的提示词
+                if iteration == 1:
+                    # 第一次调用，使用原始提示词
+                    effective_prompt = current_prompt
+                elif consecutive_tool_calls >= self.max_consecutive_tools:
+                    # 连续工具调用过多，要求提供最终答案
+                    tool_context = self._build_tool_context(result["tool_calls"])
+                    effective_prompt = f"{current_prompt}\n\n{tool_context}\n\n你已经调用了多个工具，请基于以上所有工具调用结果，直接提供最终答案，不要再次调用工具。"
+                else:
+                    # 正常对话，可以继续调用工具
+                    if result["tool_calls"]:
+                        tool_context = self._build_tool_context(result["tool_calls"])
+                        effective_prompt = f"{current_prompt}\n\n{tool_context}\n\n首先你需要思考是否需要更多信息，如果需要可以继续调用工具，如果信息足够则基于现有结果给出最终回答，不要重复调用相同的工具。"
                     else:
                         effective_prompt = current_prompt
                 
@@ -194,9 +354,13 @@ class Agent:
                 # 检查是否为工具调用
                 if isinstance(llm_response, dict) and "tool_name" in llm_response:
                     # 记录工具调用
+                    if use_mcp:
+                        caller = self.llm.mcp_caller
+                    else:
+                        caller = self.tool_caller
                     tool_call_info = {
                         "name": llm_response["tool_name"],
-                        "args": self._extract_tool_args(llm_response["llm_output"]),
+                        "args": self._extract_tool_args(llm_response["llm_output"], caller),
                         "result": llm_response["tool_result"],
                         "iteration": iteration,
                         "type": "mcp" if use_mcp else "traditional"
@@ -234,12 +398,12 @@ class Agent:
             result["final_response"] = f"处理过程中出现错误: {e}"
             
         return result
-    
-    def _extract_tool_args(self, llm_output: str) -> Dict:
+
+    def _extract_tool_args(self, llm_output: str, caller) -> Dict:
         """从LLM输出中提取工具参数"""
         try:
-            if self.tool_caller:
-                parsed = self.tool_caller.parser.validate(llm_output)
+            if caller:
+                parsed = caller.parser.validate(llm_output)
                 if parsed.get('success', False):
                     return parsed["data"].get("args", {})
         except Exception:
@@ -264,6 +428,13 @@ class Agent:
         简单聊天接口，直接返回最终回复字符串
         """
         result = self.chat(prompt, **kwargs)
+        return result["final_response"]
+    
+    async def simple_chat_async(self, prompt: str, **kwargs) -> str:
+        """
+        异步简单聊天接口，直接返回最终回复字符串
+        """
+        result = await self.chat_async(prompt, **kwargs)
         return result["final_response"]
     
     def chat_with_tools(self, prompt: str, tools: Optional[List[Callable]] = None, **kwargs) -> Dict[str, Any]:
@@ -291,6 +462,31 @@ class Agent:
             
         return result
     
+    async def chat_with_tools_async(self, prompt: str, tools: Optional[List[Callable]] = None, **kwargs) -> Dict[str, Any]:
+        """
+        异步带工具的聊天接口
+        
+        Args:
+            prompt: 用户输入
+            tools: 可选的工具列表，如果提供则临时注册这些工具
+            **kwargs: 其他参数
+        """
+        # 临时注册工具
+        original_tools = self.tools.copy()
+        original_caller = self.tool_caller
+        
+        if tools:
+            self.register_tools(tools)
+        
+        try:
+            result = await self.chat_async(prompt, use_tools=True, **kwargs)
+        finally:
+            # 恢复原始工具配置
+            self.tools = original_tools
+            self.tool_caller = original_caller
+            
+        return result
+    
     def get_conversation_history(self) -> List[Dict]:
         """获取对话历史"""
         return self.conversation_history.copy()
@@ -298,7 +494,6 @@ class Agent:
     def clear_history(self):
         """清空对话历史"""
         self.conversation_history.clear()
-        self.llm.history.clear()
     
     def get_available_tools(self) -> List[str]:
         """获取可用工具列表"""
@@ -379,9 +574,8 @@ if __name__ == "__main__":
     # 创建智能代理
     agent = create_agent_with_tools(
         tools=[calculate_add, calculate_multiply, get_weather, search_web],
-        logger=True,
-        max_iterations=5,
-        max_consecutive_tools=4  # 允许最多连续4次工具调用
+        max_iterations=6,
+        max_consecutive_tools=5  # 允许最多连续4次工具调用
     )
     
     print("=== 智能代理示例 ===")
@@ -393,10 +587,12 @@ if __name__ == "__main__":
     print(f"最终回复: {result1['final_response']}")
     print(f"工具调用: {result1['tool_calls']}")
     print(f"迭代次数: {result1['iterations']}")
+    agent.clear_history()
+    print(agent.get_conversation_history())
     
     # 测试用例2: 复合计算
     print("\n--- 测试2: 复合计算 ---")
-    result2 = agent.chat("请计算 (3 + 5) × 2 的结果")
+    result2 = agent.chat("请使用工具计算 (3 + 5) × 2 + (6 + 3) × 3 的结果,每一步都用工具实现")
     print(f"最终回复: {result2['final_response']}")
     print(f"工具调用: {result2['tool_calls']}")
     print(f"迭代次数: {result2['iterations']}")
@@ -407,6 +603,7 @@ if __name__ == "__main__":
     print(f"最终回复: {result3['final_response']}")
     print(f"工具调用: {result3['tool_calls']}")
     print(f"迭代次数: {result3['iterations']}")
+    print(agent.get_conversation_history())
     
     # 测试用例4: 普通对话（不需要工具）
     print("\n--- 测试4: 普通对话 ---")
@@ -417,7 +614,4 @@ if __name__ == "__main__":
     
     # 显示对话历史
     print("\n--- 对话历史 ---")
-    for i, entry in enumerate(agent.get_conversation_history(), 1):
-        print(f"{i}. {entry['role']}: {entry['content']}")
-        if "tool_calls" in entry:
-            print(f"   工具调用: {entry['tool_calls']}")
+    print(agent.get_conversation_history())

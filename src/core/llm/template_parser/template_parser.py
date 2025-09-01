@@ -481,7 +481,8 @@ class TemplateParser:
 
         # 查找所有可能的起始位置，逐个尝试
         matches = [m for m in re.finditer(re.escape(start_str), llm_output)]
-        for m in reversed(matches):
+        # for m in reversed(matches):
+        for m in matches:
             start_idx = m.start()
             # 定位对应的结尾位置
             if end_str:
