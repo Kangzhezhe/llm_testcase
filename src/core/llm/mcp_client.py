@@ -11,8 +11,6 @@ import concurrent.futures
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
 from enum import Enum
-import nest_asyncio
-nest_asyncio.apply()
 
 from src.core.llm.template_parser.template_parser import TemplateParser
 

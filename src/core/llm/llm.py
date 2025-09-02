@@ -113,32 +113,66 @@ class LLM:
         return collection
         
 
+    # def _build_prompt(self, prompt, docs=None, parser=None, caller=None):
+    #     history_text = ""
+    #     if self.history_len > 0:
+    #         for item in self.history[-self.history_len:]:
+    #             history_text += f"user: {item['prompt']}\nassistant: {item['response']}\n"
+
+    #     if docs:
+    #         context = "\n\n".join(
+    #             doc["content"] if isinstance(doc, dict) and "content" in doc else doc for doc in docs
+    #         )
+    #         full_prompt = (
+    #             history_text 
+    #             + "\nuser: " 
+    #             + f"你是知识库问答助手。请根据以下知识内容回答用户问题。\n\n知识内容：\n{context}\n\n用户问题：{prompt}\n\n请简明回答："
+    #         )
+    #     else:
+    #         full_prompt = history_text + "user: " + prompt
+        
+    #     if parser:
+    #         format_instructions = parser.get_format_instructions()
+    #         full_prompt += "\n\n" + format_instructions
+
+    #     if caller:
+    #         full_prompt += "\n\n" + caller.get_instructions()
+
+    #     return full_prompt
+
     def _build_prompt(self, prompt, docs=None, parser=None, caller=None):
-        history_text = ""
+        """构建消息格式（推荐用于ChatOpenAI）"""
+        # 系统消息
+        system_parts = ["你是一个智能助手，请根据用户要求提供准确、有用的回答。"]
+        
+        if parser:
+            system_parts.append(f"输出格式要求：{parser.get_format_instructions()}")
+        
+        if caller:
+            system_parts.append(f"工具使用说明：{caller.get_instructions()}")
+        
+        if docs:
+            system_parts.append("你是知识库问答助手。请根据提供的知识内容回答用户问题。")
+        
+        messages = [{"role": "system", "content": "\n\n".join(system_parts)}]
+        
+        # 历史对话
         if self.history_len > 0:
             for item in self.history[-self.history_len:]:
-                history_text += f"user: {item['prompt']}\nassistant: {item['response']}\n"
-
+                messages.append({"role": "user", "content": item['prompt']})
+                messages.append({"role": "assistant", "content": item['response']})
+        
+        # 当前用户消息
+        user_content = prompt
         if docs:
             context = "\n\n".join(
                 doc["content"] if isinstance(doc, dict) and "content" in doc else doc for doc in docs
             )
-            full_prompt = (
-                history_text 
-                + "\nuser: " 
-                + f"你是知识库问答助手。请根据以下知识内容回答用户问题。\n\n知识内容：\n{context}\n\n用户问题：{prompt}\n\n请简明回答："
-            )
-        else:
-            full_prompt = history_text + "user: " + prompt
+            user_content = f"知识内容：\n{context}\n\n用户问题：{prompt}"
         
-        if parser:
-            format_instructions = parser.get_format_instructions()
-            full_prompt += "\n\n" + format_instructions
-
-        if caller:
-            full_prompt += "\n\n" + caller.get_instructions()
-
-        return full_prompt
+        messages.append({"role": "user", "content": user_content})
+        
+        return messages
 
     def _invoke_llm(self, full_prompt, **kwargs):
         if self.logger:
