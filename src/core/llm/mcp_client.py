@@ -28,17 +28,21 @@ class MCPTransportType(Enum):
     STDIO = "stdio"
     SSE = "sse"
     WEBSOCKET = "websocket"
+    HTTP = "http"
+    STREAMABLE_HTTP = "streamable-http"
+    CUSTOM = "custom"
 
 
 @dataclass
 class MCPServerConfig:
     """MCP服务器配置"""
     name: str
-    command: str
+    command: str = None
     args: List[str] = None
     env: Dict[str, str] = None
     transport: MCPTransportType = MCPTransportType.STDIO
-    url: Optional[str] = None  # 用于SSE或WebSocket
+    url: Optional[str] = None  # 用于SSE、WebSocket、HTTP或streamable-http
+    custom_config: Optional[Dict[str, Any]] = None  # 用于custom类型
 
 
 class MCPToolCaller:
@@ -83,8 +87,6 @@ class MCPToolCaller:
                             }
                         }
                     }
-                    client = Client(client_config)
-                    await client.__aenter__()
                 elif config.transport == MCPTransportType.SSE:
                     client_config = {
                         "mcpServers": {
@@ -94,8 +96,6 @@ class MCPToolCaller:
                             }
                         }
                     }
-                    client = Client(client_config)
-                    await client.__aenter__()
                 elif config.transport == MCPTransportType.WEBSOCKET:
                     client_config = {
                         "mcpServers": {
@@ -105,11 +105,34 @@ class MCPToolCaller:
                             }
                         }
                     }
-                    client = Client(client_config)
-                    await client.__aenter__()
+                elif config.transport == MCPTransportType.HTTP:
+                    client_config = {
+                        "mcpServers": {
+                            config.name: {
+                                "transport": "http",
+                                "url": config.url
+                            }
+                        }
+                    }
+                elif config.transport == MCPTransportType.STREAMABLE_HTTP:
+                    client_config = {
+                        "mcpServers": {
+                            config.name: {
+                                "transport": "streamable-http",
+                                "url": config.url
+                            }
+                        }
+                    }
+                elif config.transport == MCPTransportType.CUSTOM:
+                    # 直接使用提供的自定义配置
+                    if not config.custom_config:
+                        raise ValueError(f"CUSTOM传输类型需要提供custom_config: {config.name}")
+                    client_config = config.custom_config
                 else:
                     continue
 
+                client = Client(client_config)
+                await client.__aenter__()
                 self.clients[config.name] = client
 
                 # 获取服务器提供的工具列表
@@ -123,7 +146,7 @@ class MCPToolCaller:
                     }
 
                 self.connected_servers.add(config.name)
-                print(f"已连接到MCP服务器: {config.name}")
+                print(f"已连接到MCP服务器: {config.name} ({config.transport.value})")
 
             except Exception as e:
                 print(f"连接MCP服务器 {config.name} 失败: {e}")
@@ -275,12 +298,82 @@ def create_mcp_configs() -> List[MCPServerConfig]:
         transport=MCPTransportType.STDIO
     ))
     
-    # 演示MCP服务器
+    # 演示MCP服务器（STDIO）
     configs.append(MCPServerConfig(
         name="demo",
         command="python",
-        args=["-m", "src.core.llm.demo_mcp_server"],
+        args=["-m", "src.core.llm.demo.demo_mcp_server"],
         transport=MCPTransportType.STDIO
     ))
     
+    # HTTP MCP服务器示例
+    configs.append(MCPServerConfig(
+        name="http_demo",
+        transport=MCPTransportType.HTTP,
+        url="http://127.0.0.1:8000"
+    ))
+    
+    # Streamable HTTP MCP服务器示例
+    configs.append(MCPServerConfig(
+        name="streamable_http_demo",
+        transport=MCPTransportType.STREAMABLE_HTTP,
+        url="http://127.0.0.1:8000"
+    ))
+    
+    # 自定义配置示例
+    # custom_config = {
+    #     "mcpServers": {
+    #         "custom_server": {
+    #             "transport": "streamable-http",
+    #             "url": "http://localhost:3000/api/mcp",
+    #             "headers": {
+    #                 "Authorization": "Bearer your-token"
+    #             }
+    #         }
+    #     }
+    # }
+    # configs.append(MCPServerConfig(
+    #     name="custom_server",
+    #     transport=MCPTransportType.CUSTOM,
+    #     custom_config=custom_config
+    # ))
+    
     return configs
+
+
+def create_http_mcp_config(name: str, url: str, streamable: bool = True) -> MCPServerConfig:
+    """
+    创建HTTP MCP服务器配置的便捷函数
+    
+    Args:
+        name: 服务器名称
+        url: 服务器URL
+        streamable: 是否使用streamable-http (True) 或 http (False)
+    
+    Returns:
+        MCPServerConfig实例
+    """
+    transport = MCPTransportType.STREAMABLE_HTTP if streamable else MCPTransportType.HTTP
+    return MCPServerConfig(
+        name=name,
+        transport=transport,
+        url=url
+    )
+
+
+def create_custom_mcp_config(name: str, config_dict: Dict[str, Any]) -> MCPServerConfig:
+    """
+    创建自定义MCP服务器配置的便捷函数
+    
+    Args:
+        name: 服务器名称
+        config_dict: 完整的客户端配置字典
+    
+    Returns:
+        MCPServerConfig实例
+    """
+    return MCPServerConfig(
+        name=name,
+        transport=MCPTransportType.CUSTOM,
+        custom_config=config_dict
+    )

@@ -31,7 +31,7 @@ async def main():
             "demo": {
                 "transport": "stdio",
                 "command": "python",
-                "args": ["-m", "src.core.llm.demo_mcp_server"]
+                "args": ["-m", "src.core.llm.demo.demo_mcp_server"]
             }
         }
     }

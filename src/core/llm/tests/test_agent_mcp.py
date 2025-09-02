@@ -33,7 +33,7 @@ class TestAgentMCP:
             MCPServerConfig(
                 name="demo",
                 command="python",
-                args=["-m", "src.core.llm.demo_mcp_server"],
+                args=["-m", "src.core.llm.demo.demo_mcp_server"],
                 transport=MCPTransportType.STDIO
             )
         ]
@@ -117,7 +117,7 @@ class TestAgentMCP:
             MCPServerConfig(
                 name="demo",
                 command="python",
-                args=["-m", "src.core.llm.demo_mcp_server"],
+                args=["-m", "src.core.llm.demo.demo_mcp_server"],
                 transport=MCPTransportType.STDIO
             )
         ]
@@ -200,7 +200,7 @@ class TestAgentMCP:
             MCPServerConfig(
                 name="demo",
                 command="python",
-                args=["-m", "src.core.llm.demo_mcp_server"],
+                args=["-m", "src.core.llm.demo.demo_mcp_server"],
                 transport=MCPTransportType.STDIO
             )
         ]

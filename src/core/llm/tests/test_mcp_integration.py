@@ -90,7 +90,7 @@ class TestLLMIntegration:
             MCPServerConfig(
                 name="demo",
                 command="python",
-                args=["-m", "src.core.llm.demo_mcp_server"],
+                args=["-m", "src.core.llm.demo.demo_mcp_server"],
                 transport=MCPTransportType.STDIO
             )
         ]
@@ -183,7 +183,7 @@ class TestLLMIntegration:
             MCPServerConfig(
                 name="demo",
                 command="python",
-                args=["-m", "src.core.llm.demo_mcp_server"],
+                args=["-m", "src.core.llm.demo.demo_mcp_server"],
                 transport=MCPTransportType.STDIO
             )
         ]
@@ -239,7 +239,7 @@ class TestLLMIntegration:
             MCPServerConfig(
                 name="demo",
                 command="python",
-                args=["-m", "src.core.llm.demo_mcp_server"],
+                args=["-m", "src.core.llm.demo.demo_mcp_server"],
                 transport=MCPTransportType.STDIO
             )
         ]
@@ -325,7 +325,7 @@ class TestLLMIntegration:
             MCPServerConfig(
                 name="demo",
                 command="python",
-                args=["-m", "src.core.llm.demo_mcp_server"],
+                args=["-m", "src.core.llm.demo.demo_mcp_server"],
                 transport=MCPTransportType.STDIO
             )
         ]
