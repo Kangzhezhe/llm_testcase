@@ -23,7 +23,7 @@ class Agent:
     在工具调用后会自动重新生成LLM输出，直到获得最终的聊天结果
     """
     
-    def __init__(self, model=None, temperature=0.3, history_len=5, logger=False, max_iterations=5, max_consecutive_tools=3, mcp_configs=None):
+    def __init__(self, model=None, temperature=0.3, history_len=5, logger=False, max_iterations=5, max_consecutive_tools=None, mcp_configs=None):
         """
         初始化智能代理
         
@@ -40,7 +40,10 @@ class Agent:
         self.tools = {}
         self.tool_caller = None
         self.max_iterations = max_iterations
-        self.max_consecutive_tools = max_consecutive_tools
+        if max_consecutive_tools is None:
+            self.max_consecutive_tools = max_iterations - 1
+        else:
+            self.max_consecutive_tools = max_consecutive_tools
         self.conversation_history = []
         self.mcp_configs = mcp_configs
         self.history_len = history_len
@@ -68,41 +71,6 @@ class Agent:
         if tool_results:
             entry["tool_results"] = tool_results
         self.conversation_history.append(entry)
-        
-    def _build_enhanced_prompt(self, prompt: str, docs: Optional[List] = None) -> str:
-        """
-        构建增强的提示词，包含对话历史和工具调用上下文
-        """
-        # 构建对话历史
-        history_text = ""
-        if self.conversation_history:
-            for entry in self.conversation_history[-self.history_len:]:
-                role = entry["role"]
-                content = entry["content"]
-                history_text += f"{role}: {content}\n"
-                
-                # 添加工具调用历史
-                if "tool_calls" in entry:
-                    for tool_call in entry["tool_calls"]:
-                        history_text += f"[工具调用] {tool_call['name']}: {tool_call['args']}\n"
-                if "tool_results" in entry:
-                    for tool_result in entry["tool_results"]:
-                        history_text += f"[工具结果] {tool_result['name']}: {tool_result['result']}\n"
-        
-        # 添加知识库内容
-        if docs:
-            context = "\n\n".join(
-                doc["content"] if isinstance(doc, dict) and "content" in doc else doc for doc in docs
-            )
-            full_prompt = (
-                history_text 
-                + "\nuser: " 
-                + f"你是知识库问答助手。请根据以下知识内容和对话历史回答用户问题。\n\n知识内容：\n{context}\n\n用户问题：{prompt}\n\n请简明回答："
-            )
-        else:
-            full_prompt = history_text + "user: " + prompt
-            
-        return full_prompt
         
     async def chat_async(self, prompt: str, docs: Optional[List] = None, parser: Optional[TemplateParser] = None, 
                          use_tools: bool = True, use_mcp: bool = False, **kwargs) -> Dict[str, Any]:
@@ -171,14 +139,16 @@ class Agent:
                 {tool_context}
 
                 ⚠️ 已调用过的工具及参数: {called_tools_summary}
-                请不要重复调用相同工具和相同参数。如果已有信息足够回答问题，请给出最终答案；如果需要更多信息，请调用新的工具或使用不同的参数。"""
+                请不要重复调用相同工具和相同参数。如果已有信息足够回答问题，请给出最终答案；如果需要更多信息，请调用新的工具或使用不同的参数。
+                如果历史调用工具出错请分析出错原因，如果是参数不对请不要重复调用相同工具和相同参数。
+                """
                     else:
                         effective_prompt = current_prompt
                 
                 # 决定本轮是否允许工具调用
                 allow_tools_this_round = True
-                if iteration >= self.max_iterations - 1:
-                    # 到了最后一轮或倒数第二轮，不再允许工具调用
+                if iteration >= self.max_iterations:
+                    # 到了最后一轮，不再允许工具调用
                     allow_tools_this_round = False
 
                 # 调用LLM - 支持MCP和传统工具（根据 allow_tools_this_round 开关）
@@ -254,6 +224,13 @@ class Agent:
             result["error"] = str(e)
             result["final_response"] = f"处理过程中出现错误: {e}"
             
+            # 即使出现错误，也要记录到历史中
+            self._add_to_history(
+                "assistant", 
+                result["final_response"],
+                tool_calls=result["tool_calls"] if result["tool_calls"] else None
+            )
+            
         return result
 
     def chat(self, prompt: str, docs: Optional[List] = None, parser: Optional[TemplateParser] = None, 
@@ -316,11 +293,11 @@ class Agent:
                         effective_prompt = current_prompt
                 
                 # 决定本轮是否允许工具调用：
-                # 如果当前是倒数第二次迭代（即 iteration == max_iterations - 1），
+                # 如果当前是最后一次迭代（即 iteration == max_iterations），
                 # 则不允许再调用任何工具，让模型直接基于已有上下文给出最终答案。
                 allow_tools_this_round = True
-                if iteration >= self.max_iterations - 1:
-                    # 到了最后一轮或倒数第二轮，不再允许工具调用
+                if iteration >= self.max_iterations:
+                    # 到了最后一轮，不再允许工具调用
                     allow_tools_this_round = False
 
                 # 调用LLM - 支持MCP和传统工具（根据 allow_tools_this_round 开关）
@@ -396,6 +373,13 @@ class Agent:
             result["success"] = False
             result["error"] = str(e)
             result["final_response"] = f"处理过程中出现错误: {e}"
+            
+            # 即使出现错误，也要记录到历史中
+            self._add_to_history(
+                "assistant", 
+                result["final_response"],
+                tool_calls=result["tool_calls"] if result["tool_calls"] else None
+            )
             
         return result
 

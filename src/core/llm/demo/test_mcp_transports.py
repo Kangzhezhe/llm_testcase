@@ -10,6 +10,7 @@ import pytest
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 
+from src.core.llm.agent import Agent
 from src.core.llm.llm import LLM
 from src.core.llm.mcp_client import (
     MCPToolCaller, 
@@ -160,6 +161,32 @@ async def _test_llm_tool_call_parsing():
     finally:
         await caller.disconnect_servers()
 
+async def _test_llm_mcp_connect():
+    print("\n=== 测试LLM与MCP连接 ===")
+
+    config = MCPServerConfig(
+        name="amap-amap-sse",
+        transport=MCPTransportType.SSE,
+        url="https://mcp.amap.com/sse?key=749937bed60616bdaa37491c5415006b"
+    )
+    
+    caller = MCPToolCaller([config])
+    
+    try:
+        await caller.connect_servers()
+        print("可用工具:", caller.get_available_tools())
+        print(caller.available_tools)
+        
+    except Exception as e:
+        print(f"自定义传输测试失败: {e}")
+    finally:
+        await caller.disconnect_servers()
+
+    agent = Agent(mcp_configs=[config],max_iterations=10)
+    output = await agent.chat_async('帮我查一下华中科技大学到武汉站的地铁路线',use_mcp=True)
+    print(f"LLM调用结果: {output}")
+
+
 
 async def main():
     """主测试函数"""
@@ -173,11 +200,12 @@ async def main():
     
     # 按顺序测试不同传输类型
     tests = [
-        ("STDIO传输", _test_stdio_transport),
-        ("HTTP传输", _test_http_transport),
-        ("Streamable HTTP传输", _test_streamable_http_transport),
-        ("自定义传输", _test_custom_transport),
-        ("LLM解析", _test_llm_tool_call_parsing),
+        # ("STDIO传输", _test_stdio_transport),
+        # ("HTTP传输", _test_http_transport),
+        # ("Streamable HTTP传输", _test_streamable_http_transport),
+        # ("自定义传输", _test_custom_transport),
+        # ("LLM解析", _test_llm_tool_call_parsing),
+        ("LLM与MCP连接", _test_llm_mcp_connect)
     ]
     
     for test_name, test_func in tests:
